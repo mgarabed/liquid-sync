@@ -8,8 +8,9 @@ tier:
 priority: P2
 author: Mike Garabedian
 created: 2026-11-21
-branch:
-pr:
+branch: 
+pr: 
+depends: 0002, 0004
 ---
 # Intent: Configure CouchDB for LiveSync in config/local.ini
 

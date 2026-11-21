@@ -8,8 +8,9 @@ tier:
 priority: P3
 author: Mike Garabedian
 created: 2026-11-21
-branch:
-pr:
+branch: 
+pr: 
+depends: 0001
 ---
 # Intent: Decide Docker vs Podman for local development (ADR 0001)
 
