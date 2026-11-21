@@ -2,16 +2,18 @@
 id: 0001
 title: Block personal and secret leaks before commit and push
 type: chore
-status: building
+status: in-review
 risk: low
 tier: high
 priority: P1
 author: Mike Garabedian
 created: 2026-11-21
 branch: work/0001-block-personal-and-secret-leaks-before-commit-an
-pr: 
+pr: 1
 spec_hash: requirements=346e44be5c8b;acceptance-criteria=04e486f56e75;areas-of-concern=eb22907693e1
 started: 2026-11-21T16:56:41+00:00
+submitted: 2026-11-21T17:31:00+00:00
+submitted_verify: full
 ---
 # Intent: Block personal and secret leaks before commit and push
 
