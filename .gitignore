@@ -221,3 +221,18 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- liquid-sync project-specific ---
+# Secrets
+.env
+*.setup-uri
+secrets/
+
+# Runtime data
+data/
+backups/
+archive/
+
+# OS / editor
+.DS_Store
+.obsidian/workspace*.json
