@@ -8,8 +8,9 @@ tier:
 priority: P2
 author: Mike Garabedian
 created: 2026-11-21
-branch:
-pr:
+branch: 
+pr: 
+depends: 0001
 ---
 # Intent: Add sample vault test fixture
 
