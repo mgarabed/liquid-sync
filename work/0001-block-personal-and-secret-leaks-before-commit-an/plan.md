@@ -44,10 +44,11 @@ from: spec.md
   - report each match as `<short sha> <file>:<line>`, or `<short sha> message` / `<short sha> author-email`. As built, message matches carry the message line (`<sha> message:<n>: <rule>`), and email findings never print the email.
 
   Add `.githooks/pre-push`. Tests use a temporary bare remote: `push_blocks_bad_author`, `push_blocks_message_leak` and `push_new_branch_scans_only_new_commits`. Run `sdlc verify`.
-- [ ] 5. Docs and the Linux check:
+- [x] 5. Docs and the Linux check:
   - Add the README "Development" section.
   - Run `scripts/install-hooks` in this clone. That's local git config, not a repo change; confirm the verify warning goes away.
   - Run AC12 on Linux: `docker run --rm -v "$PWD":/src -w /src fedora:41 bash -c 'dnf -yq install git ShellCheck && test/leak-check.sh'`. That's Docker; Podman isn't installed on the dev machine. Record the result in the build report, or "unchecked" if the container can't run.
+  - (as built) a worktree's `.git` file points at a host path, so the run mounts the main checkout at its own host path and adds `safe.directory '*'` in the container: `docker run --rm -v <main checkout>:<main checkout> -w <worktree> fedora:41 bash -c 'dnf -yq install git ShellCheck && git config --global --add safe.directory "*" && test/leak-check.sh && scripts/leak-check --tree'`. Result: all 14 tests pass on Fedora 41 (GNU bash 5.2, git 2.52), and `--tree` is clean.
   - Run `sdlc verify`.
 
 ## Risks
