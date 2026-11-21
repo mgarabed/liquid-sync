@@ -30,9 +30,10 @@ from: spec.md
 
   Write `test/leak-check.sh` with the harness and these tests: `generic_rules_cover_required`, `allow_marker_line_only`, `allowlist_file_and_rule_only` (tree variants), `missing_personal_warns` and `personal_file_perms_warn`, plus a tree-mode personal-masking check (`tree_personal_masked`) and `malformed_rule_fails`. Add verify steps `{ name = "leak-check", run = "scripts/leak-check --tree" }` and `{ name = "leak-check-tests", run = "test/leak-check.sh" }`. Confirm `scripts/leak-check --tree` is clean on this repo (AC9), then run `sdlc verify`.
 - [x] 2. Staged mode and hook install. Add `--staged` to `scripts/leak-check`: parse `git diff --cached -U0 --no-color --no-ext-diff`, track the path from `+++ b/` and the line number from `@@ … +N`, and scan only `+` lines. Add `.githooks/pre-commit` (leak part only) and `scripts/install-hooks`. Tests: `staged_generic_blocks`, `staged_personal_blocks_masked`, the staged variant of `allow_marker_line_only`, and `install_hooks_idempotent` (AC11). Run `sdlc verify`.
-- [ ] 3. Pre-commit shellcheck. Extend `.githooks/pre-commit`:
+- [x] 3. Pre-commit shellcheck. Extend `.githooks/pre-commit`:
   - find staged added or modified files (`git diff --cached --name-only --diff-filter=AM -z`) whose name ends in `.sh` or whose staged first line (`git show :<path> | head -1`) is a sh/bash shebang
-  - run `git show :<path> | shellcheck -s bash -`
+  - run `git show :<path> | shellcheck -s bash -`. As built, `-s bash` is passed only when the staged file has no shebang, so a `#!/bin/sh` script is checked as sh.
+  - (as built) a commit that stages no shell scripts doesn't need shellcheck installed
   - fail with "shellcheck is not installed" when `command -v shellcheck` fails
 
   Test: `precommit_shellcheck_blocks`, covering both the SC2086 case and the shellcheck-missing case. The missing case runs the hook with `PATH` set to a temporary directory that has symlinks to `git`, `bash`, `grep`, `sed`, `awk`, `head`, `tr` and `env`, but no shellcheck. Run `sdlc verify`.

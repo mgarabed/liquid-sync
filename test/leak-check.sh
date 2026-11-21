@@ -271,6 +271,50 @@ t_install_hooks_idempotent() {
   [ "$(cat .git/config)" = "$before" ] || fail "second run changed .git/config"
 }
 
+# 0001 AC10: pre-commit runs shellcheck on staged shell scripts, and fails
+# (doesn't skip) when shellcheck is missing.
+t_precommit_shellcheck_blocks() {
+  hook_repo shellcheck
+  local d='$'
+  printf '%s\n' '#!/usr/bin/env bash' "echo ${d}1" > bad.sh
+  git add bad.sh
+  run git commit -m "bad script"
+  [ "$rc" -ne 0 ] || fail "commit with a shellcheck finding succeeded" "$out"
+  expect_has "SC2086"
+  expect_has "bad.sh"
+  # A shebang without a .sh name counts as a script too.
+  git rm -q --cached bad.sh
+  printf '%s\n' '#!/bin/sh' "echo ${d}1" > tool
+  git add tool
+  run git commit -m "bad tool"
+  [ "$rc" -ne 0 ] || fail "commit of an extensionless bad script succeeded" "$out"
+  expect_has "SC2086"
+  # The staged version is checked, not the working copy.
+  printf '%s\n' '#!/bin/sh' "echo \"${d}1\"" > tool
+  run git commit -m "still bad in the index"
+  [ "$rc" -ne 0 ] || fail "the working copy was checked instead of the index" "$out"
+  git add tool
+  run git commit -m "good tool"
+  expect_rc 0
+  # Without shellcheck on PATH, a staged script blocks the commit.
+  local bin="$tmp_root/minimal-bin" tool_name
+  mkdir -p "$bin"
+  for tool_name in git bash sh env grep sed awk head tr cut dirname mktemp rm cat stat; do
+    ln -sf "$(command -v "$tool_name")" "$bin/$tool_name"
+  done
+  printf '%s\n' '#!/usr/bin/env bash' 'echo ok' > good.sh
+  git add good.sh
+  PATH=$bin run git commit -m "no shellcheck"
+  [ "$rc" -ne 0 ] || fail "commit succeeded without shellcheck" "$out"
+  expect_has "shellcheck is not installed"
+  # A commit with no shell scripts doesn't need shellcheck.
+  git rm -q --cached good.sh
+  printf 'notes\n' > notes.txt
+  git add notes.txt
+  PATH=$bin run git commit -m "notes only"
+  expect_rc 0
+}
+
 # 0001 design: a malformed rules file fails with its own path and line.
 t_malformed_rule_fails() {
   new_repo malformed
@@ -287,7 +331,8 @@ t_malformed_rule_fails() {
 # --- runner ------------------------------------------------------------------
 all_tests="generic_rules_cover_required allow_marker_line_only allowlist_file_and_rule_only
 missing_personal_warns personal_file_perms_warn tree_personal_masked malformed_rule_fails
-staged_generic_blocks staged_personal_blocks_masked install_hooks_idempotent"
+staged_generic_blocks staged_personal_blocks_masked install_hooks_idempotent
+precommit_shellcheck_blocks"
 
 selected=${*:-$all_tests}
 failed=0

@@ -1,7 +1,42 @@
 #!/usr/bin/env bash
-# pre-commit hook (work item 0001): block leaks in the staged diff.
+# pre-commit hook (work item 0001): block leaks in the staged diff, then lint the
+# staged content of every staged shell script with ShellCheck.
 # Enabled by scripts/install-hooks (core.hooksPath=.githooks).
 set -euo pipefail
 
 root=$(git rev-parse --show-toplevel)
+cd "$root"
 "$root/scripts/leak-check" --staged
+
+# Shell scripts: a .sh name, or a sh/bash shebang on the staged first line.
+scripts=()
+while IFS= read -r -d '' path; do
+  case "$path" in
+    *.sh) scripts+=("$path"); continue ;;
+  esac
+  first=$(git cat-file blob ":$path" 2>/dev/null | awk 'NR == 1')
+  if printf '%s\n' "$first" | grep -qE '^#![^[:space:]]*([/[:space:]]|env[[:space:]]+)(ba)?sh([[:space:]]|$)'; then
+    scripts+=("$path")
+  fi
+done < <(git diff --cached --name-only --diff-filter=AM -z)
+
+[ "${#scripts[@]}" -gt 0 ] || exit 0
+
+# 0001: a missing shellcheck blocks the commit rather than skipping the check.
+if ! command -v shellcheck >/dev/null 2>&1; then
+  printf 'pre-commit: shellcheck is not installed; it is needed to check: %s\n' "${scripts[*]}" >&2
+  printf 'pre-commit: install it (brew install shellcheck, dnf install ShellCheck) and commit again.\n' >&2
+  exit 1
+fi
+
+failed=0
+for path in "${scripts[@]}"; do
+  shell_opt=()
+  # Without a shebang, shellcheck can't tell the shell; assume bash.
+  git cat-file blob ":$path" | awk 'NR == 1' | grep -q '^#!' || shell_opt=(-s bash)
+  if ! out=$(git cat-file blob ":$path" | shellcheck "${shell_opt[@]+"${shell_opt[@]}"}" - 2>&1); then
+    printf 'pre-commit: shellcheck findings in %s (staged version):\n%s\n' "$path" "$out" >&2
+    failed=1
+  fi
+done
+exit "$failed"
