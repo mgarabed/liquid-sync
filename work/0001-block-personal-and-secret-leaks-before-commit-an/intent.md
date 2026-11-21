@@ -2,7 +2,7 @@
 id: 0001
 title: Block personal and secret leaks before commit and push
 type: chore
-status: specced
+status: planned
 risk: low
 tier: high
 priority: P1
