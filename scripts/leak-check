@@ -1,0 +1,247 @@
+#!/usr/bin/env bash
+# leak-check: block personal data and secrets before they reach a commit or a push.
+# Work item 0001. Portable to bash 3.2 and BSD userland: no associative arrays,
+# no mapfile, POSIX ERE only.
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/leak-check --tree | --staged | --push <remote>
+
+Scan for secrets and personal data.
+
+  --tree           scan every tracked text file in the working tree (sdlc verify)
+  --staged         scan lines added in the staged diff (pre-commit hook)
+  --push <remote>  scan commits the remote doesn't have yet, read from the
+                   pre-push hook's stdin: added lines, commit messages, and
+                   author/committer emails (pre-push hook)
+  -h, --help       show this help
+
+Rules:
+  generic   scripts/leak-check.rules (<name><TAB><ERE>)
+  personal  $LIQUID_SYNC_LEAK_PATTERNS, or
+            ${XDG_CONFIG_HOME:-$HOME/.config}/liquid-sync/leak-patterns
+            (one ERE per line, matched case-insensitively; keep it chmod 600)
+  emails    scripts/leak-check.emails (allowed author/committer emails)
+
+Allowing a match:
+  - put the marker "leak-check: allow" on the line itself, or
+  - add "<path glob><TAB><rule name>" to .leak-allow at the repo root.
+
+Exit status: 0 clean, 1 leaks found, 2 usage or configuration error.
+EOF
+}
+
+die() {
+  printf 'leak-check: error: %s\n' "$1" >&2
+  exit 2
+}
+
+warn() {
+  printf 'leak-check: warning: %s\n' "$1" >&2
+}
+
+export LC_ALL=C
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+rules_file="$script_dir/leak-check.rules"
+
+mode=""
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+  --tree|--staged) mode=${1#--}; [ $# -eq 1 ] || die "unexpected argument: ${2}" ;;
+  "") usage >&2; exit 2 ;;
+  *) die "unknown argument: $1 (see --help)" ;;
+esac
+
+command -v git >/dev/null 2>&1 || die "git is not installed"
+root=$(git rev-parse --show-toplevel 2>/dev/null) || die "not inside a git work tree"
+cd "$root"
+
+work=$(mktemp -d "${TMPDIR:-/tmp}/leak-check.XXXXXX")
+trap 'rm -rf "$work"' EXIT
+
+# Rules live in parallel indexed arrays (bash 3.2 has no associative arrays).
+rule_names=()
+rule_res=()
+rule_personal=()
+
+load_generic_rules() {
+  [ -r "$rules_file" ] || die "cannot read rules file $rules_file"
+  local n=0 line name re
+  while IFS= read -r line || [ -n "$line" ]; do
+    n=$((n + 1))
+    case "$line" in ''|'#'*) continue ;; esac
+    case "$line" in
+      *"	"*) ;;
+      *) die "$rules_file:$n: malformed rule (expected <name><TAB><regex>)" ;;
+    esac
+    name=${line%%"	"*}
+    re=${line#*"	"}
+    [ -n "$name" ] && [ -n "$re" ] || die "$rules_file:$n: malformed rule (empty name or regex)"
+    # grep exits 2 on an invalid regex; 0 or 1 means it compiled.
+    local rc=0
+    printf '' | grep -E -e "$re" >/dev/null 2>&1 || rc=$?
+    [ "$rc" -le 1 ] || die "$rules_file:$n: invalid regex for rule $name"
+    rule_names+=("$name")
+    rule_res+=("$re")
+    rule_personal+=(0)
+  done < "$rules_file"
+}
+
+file_mode() {
+  stat -f %Lp "$1" 2>/dev/null || stat -c %a "$1" 2>/dev/null || echo ""
+}
+
+load_personal_patterns() {
+  local path
+  if [ -n "${LIQUID_SYNC_LEAK_PATTERNS:-}" ]; then
+    path=$LIQUID_SYNC_LEAK_PATTERNS
+  else
+    path="${XDG_CONFIG_HOME:-$HOME/.config}/liquid-sync/leak-patterns"
+  fi
+  # 0001: a missing file warns and continues (CI and fresh clones never have
+  # one); every machine that has it re-checks on each commit and push.
+  if [ ! -e "$path" ]; then
+    warn "no personal pattern file at $path; checking generic rules only"
+    return 0
+  fi
+  [ -r "$path" ] || die "personal pattern file $path is not readable"
+  local mode_bits
+  mode_bits=$(file_mode "$path")
+  if [ -n "$mode_bits" ]; then
+    local g o
+    o=${mode_bits: -1}
+    g=${mode_bits: -2:1}
+    if [ $((g & 4)) -ne 0 ] || [ $((o & 4)) -ne 0 ]; then
+      warn "personal pattern file $path is readable by group or others; run: chmod 600 $path"
+    fi
+  fi
+  # Never echo a personal pattern, even in an error: report its line number.
+  local n=0 line rc
+  while IFS= read -r line || [ -n "$line" ]; do
+    n=$((n + 1))
+    case "$line" in '#'*) continue ;; esac
+    case "$line" in *[![:space:]]*) ;; *) continue ;; esac
+    rc=0
+    printf '' | grep -iE -e "$line" >/dev/null 2>&1 || rc=$?
+    [ "$rc" -le 1 ] || die "personal pattern file $path line $n: invalid regex"
+    rule_names+=("personal:$n")
+    rule_res+=("$line")
+    rule_personal+=(1)
+  done < "$path"
+}
+
+# Allowlist globs and rule names, from .leak-allow at the repo root.
+allow_globs=()
+allow_rules=()
+
+load_allowlist() {
+  local file="$root/.leak-allow"
+  [ -e "$file" ] || return 0
+  local n=0 line
+  while IFS= read -r line || [ -n "$line" ]; do
+    n=$((n + 1))
+    case "$line" in ''|'#'*) continue ;; esac
+    case "$line" in
+      *"	"*) ;;
+      *) die ".leak-allow:$n: malformed entry (expected <path glob><TAB><rule name>)" ;;
+    esac
+    allow_globs+=("${line%%"	"*}")
+    allow_rules+=("${line#*"	"}")
+  done < "$file"
+}
+
+is_allowlisted() { # <path> <rule>
+  local i
+  for ((i = 0; i < ${#allow_globs[@]}; i++)); do
+    [ "${allow_rules[$i]}" = "$2" ] || continue
+    # shellcheck disable=SC2053 # the right side is a glob on purpose
+    [[ $1 == ${allow_globs[$i]} ]] && return 0
+  done
+  return 1
+}
+
+# The scan input is two parallel files: $work/content holds one scanned line
+# per line, and $work/index holds "<label>\t<path>\t<line number>" for the same
+# line ("-" when there is no label). Every mode builds them, then scan_input matches the rules.
+: > "$work/content"
+: > "$work/index"
+findings=0
+
+scan_input() {
+  local content="$work/content" index="$work/index"
+  [ -s "$content" ] || return 0
+  grep -nF 'leak-check: allow' "$content" | cut -d: -f1 > "$work/marked" || true
+  : > "$work/hits"
+  local i rc flags
+  for ((i = 0; i < ${#rule_names[@]}; i++)); do
+    flags=-noE
+    [ "${rule_personal[$i]}" -eq 1 ] && flags=-noiE
+    rc=0
+    grep "$flags" -e "${rule_res[$i]}" "$content" > "$work/m" 2>/dev/null || rc=$?
+    [ "$rc" -le 1 ] || die "matching failed for rule ${rule_names[$i]}"
+    [ "$rc" -eq 0 ] || continue
+    # Join match line numbers to the index; drop marked lines; mask the value.
+    # 0001: generic matches show at most 4 characters, personal ones none.
+    awk -F'\t' -v rule="${rule_names[$i]}" -v personal="${rule_personal[$i]}" '
+      FILENAME == ARGV[1] { idx[FNR] = $0; next }
+      FILENAME == ARGV[2] { marked[$1] = 1; next }
+      {
+        c = index($0, ":")
+        n = substr($0, 1, c - 1)
+        if (n in marked) next
+        if ((n SUBSEP rule) in seen) next
+        seen[n SUBSEP rule] = 1
+        mask = (personal == 1) ? "" : substr($0, c + 1, 4) "..."
+        print idx[n] "\t" rule "\t" mask
+      }' "$index" "$work/marked" "$work/m" >> "$work/hits"
+  done
+  local label path line rule mask where
+  while IFS="	" read -r label path line rule mask; do
+    is_allowlisted "$path" "$rule" && continue
+    where="$path:$line"
+    [ "$label" = "-" ] || where="$label $where"
+    if [ -n "$mask" ]; then
+      printf '%s: %s [%s]\n' "$where" "$rule" "$mask"
+    else
+      printf '%s: %s\n' "$where" "$rule"
+    fi
+    findings=$((findings + 1))
+  done < "$work/hits"
+}
+
+build_tree_input() {
+  if [ "$(git config core.hooksPath || true)" != ".githooks" ]; then
+    warn "git hooks are not enabled in this clone; run scripts/install-hooks"
+  fi
+  # git grep skips binary files (-I) and prints path\0line\0content. NULs are
+  # swapped for \001 because BSD awk can't read them.
+  local rc=0
+  git grep --no-color -z -n -I -e '' > "$work/raw" 2>/dev/null || rc=$?
+  [ "$rc" -le 1 ] || die "git grep failed"
+  tr '\000' '\001' < "$work/raw" | awk -v idx="$work/index" -v out="$work/content" '
+    {
+      a = index($0, "\001"); path = substr($0, 1, a - 1); rest = substr($0, a + 1)
+      b = index(rest, "\001"); n = substr(rest, 1, b - 1)
+      print "-\t" path "\t" n > idx
+      print substr(rest, b + 1) > out
+    }'
+}
+
+load_generic_rules
+load_personal_patterns
+load_allowlist
+
+case "$mode" in
+  tree) build_tree_input ;;
+esac
+
+scan_input
+
+if [ "$findings" -gt 0 ]; then
+  printf 'leak-check: %d leak(s) found (%s).\n' "$findings" "$mode" >&2
+  printf 'leak-check: remove them, mark an intended line with "leak-check: allow", or add "<path glob><TAB><rule>" to .leak-allow.\n' >&2
+  exit 1
+fi
+printf 'leak-check: clean (%s)\n' "$mode"

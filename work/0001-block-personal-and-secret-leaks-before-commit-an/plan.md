@@ -19,14 +19,16 @@ from: spec.md
 - `README.md` (edit): a "Development" section covering `scripts/install-hooks`, the personal-pattern file path and format (`chmod 600`), and the `leak-check: allow` marker. No example personal values.
 
 ## Order of work
-- [ ] 1. Tree mode. Write `scripts/leak-check.rules`, `scripts/leak-check.emails` and `.leak-allow`, plus `scripts/leak-check` with shared plumbing:
+- [x] 1. Tree mode. Write `scripts/leak-check.rules`, `scripts/leak-check.emails` and `.leak-allow`, plus `scripts/leak-check` with shared plumbing:
   - rule loading, with a malformed-line error naming the rules file and line
   - personal-file lookup (R6: env var, then XDG path, then the missing-file warning, then the permission warning)
   - allow-marker and `.leak-allow` filtering (R5)
   - masking (R4)
   - `--tree` via `git grep -nIE`, with the hooks-not-enabled warning when `git config core.hooksPath` isn't `.githooks`
+  - (as built) `--tree` dumps tracked text lines once with `git grep -z -n -I -e ''`, then every mode matches through the same `grep -noE` pass over a content file plus a parallel index file. That keeps one regex engine for matching and masking. Personal patterns match case-insensitively (`grep -i`).
+  - (as built) `.leak-allow` has one entry: this item's `spec.md` for `private-ipv4`, because AC8's text names the CGNAT test address. AC9 only rules out entries under `scripts/`, `test/` and `.githooks/`.
 
-  Write `test/leak-check.sh` with the harness and these tests: `generic_rules_cover_required`, `allow_marker_line_only`, `allowlist_file_and_rule_only` (tree variants), `missing_personal_warns` and `personal_file_perms_warn`, plus a tree-mode personal-masking check. Add verify steps `{ name = "leak-check", run = "scripts/leak-check --tree" }` and `{ name = "leak-check-tests", run = "test/leak-check.sh" }`. Confirm `scripts/leak-check --tree` is clean on this repo (AC9), then run `sdlc verify`.
+  Write `test/leak-check.sh` with the harness and these tests: `generic_rules_cover_required`, `allow_marker_line_only`, `allowlist_file_and_rule_only` (tree variants), `missing_personal_warns` and `personal_file_perms_warn`, plus a tree-mode personal-masking check (`tree_personal_masked`) and `malformed_rule_fails`. Add verify steps `{ name = "leak-check", run = "scripts/leak-check --tree" }` and `{ name = "leak-check-tests", run = "test/leak-check.sh" }`. Confirm `scripts/leak-check --tree` is clean on this repo (AC9), then run `sdlc verify`.
 - [ ] 2. Staged mode and hook install. Add `--staged` to `scripts/leak-check`: parse `git diff --cached -U0 --no-color --no-ext-diff`, track the path from `+++ b/` and the line number from `@@ … +N`, and scan only `+` lines. Add `.githooks/pre-commit` (leak part only) and `scripts/install-hooks`. Tests: `staged_generic_blocks`, `staged_personal_blocks_masked`, the staged variant of `allow_marker_line_only`, and `install_hooks_idempotent` (AC11). Run `sdlc verify`.
 - [ ] 3. Pre-commit shellcheck. Extend `.githooks/pre-commit`:
   - find staged added or modified files (`git diff --cached --name-only --diff-filter=AM -z`) whose name ends in `.sh` or whose staged first line (`git show :<path> | head -1`) is a sh/bash shebang

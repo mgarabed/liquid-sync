@@ -1,0 +1,4 @@
+# Allowlist for scripts/leak-check (0001).
+# Format: <path glob><TAB><rule name>, one per line; both must match for a finding to be allowed.
+# Prefer the inline marker comment on the one line that needs it. Keep entries rare and specific.
+work/0001-block-personal-and-secret-leaks-before-commit-an/spec.md	private-ipv4

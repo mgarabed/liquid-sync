@@ -1,0 +1,6 @@
+# Allowed author and committer emails for scripts/leak-check --push (0001).
+# One anchored POSIX ERE per line. Blank lines and # comments are ignored.
+# Never add a personal address here: this file is public.
+
+^[0-9]+\+[^@]+@users\.noreply\.github\.com$
+^noreply@github\.com$

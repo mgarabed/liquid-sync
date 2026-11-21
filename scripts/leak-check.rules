@@ -1,0 +1,11 @@
+# Generic leak rules for scripts/leak-check (0001).
+# Format: <rule name><TAB><POSIX ERE>, one per line. Blank lines and # comments are ignored.
+# Each regex must not match its own text: this file is scanned by `leak-check --tree` too.
+# Use bracket classes and explicit boundaries; no \b, \d, \s or other non-POSIX escapes.
+
+private-ipv4	(^|[^0-9.])(10\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[01])|192\.168|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7]))\.[0-9]{1,3}\.[0-9]{1,3}([^0-9]|$)
+tailnet-hostname	[A-Za-z0-9-]+\.ts\.net([^A-Za-z0-9-]|$)
+tailscale-key	tskey-[a-z]+-[A-Za-z0-9]{6,}
+livesync-setup-uri	obsidian://setuplivesync\?settings=[^[:space:]]
+url-credentials	[A-Za-z][A-Za-z0-9+.-]*://[^/[:space:]:@]+:[^/[:space:]@$<{][^/[:space:]@]*@
+secret-assignment	[A-Za-z0-9_]*(PASSWORD|PASSPHRASE|SECRET|TOKEN|AUTHKEY)[A-Za-z0-9_]*["']?[[:space:]]*[:=][[:space:]]*["']?[^[:space:]"'$<{]
