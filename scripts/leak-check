@@ -179,12 +179,12 @@ findings=0
 scan_input() {
   local content="$work/content" index="$work/index"
   [ -s "$content" ] || return 0
-  grep -nF 'leak-check: allow' "$content" | cut -d: -f1 > "$work/marked" || true
+  grep -anF 'leak-check: allow' "$content" | cut -d: -f1 > "$work/marked" || true
   : > "$work/hits"
   local i rc flags
   for ((i = 0; i < ${#rule_names[@]}; i++)); do
-    flags=-noE
-    [ "${rule_personal[$i]}" -eq 1 ] && flags=-noiE
+    flags=-anoE
+    [ "${rule_personal[$i]}" -eq 1 ] && flags=-anoiE
     rc=0
     grep "$flags" -e "${rule_res[$i]}" "$content" > "$work/m" 2>/dev/null || rc=$?
     [ "$rc" -le 1 ] || die "matching failed for rule ${rule_names[$i]}"
@@ -222,10 +222,10 @@ build_tree_input() {
   if [ "$(git config core.hooksPath || true)" != ".githooks" ]; then
     warn "git hooks are not enabled in this clone; run scripts/install-hooks"
   fi
-  # git grep skips binary files (-I) and prints path\0line\0content. NULs are
-  # swapped for \001 because BSD awk can't read them.
+  # git grep -a reads binary files too (see git_diff) and prints
+  # path\0line\0content. NULs are swapped for \001 because BSD awk can't read them.
   local rc=0
-  git grep --no-color -z -n -I -e '' > "$work/raw" 2>/dev/null || rc=$?
+  git grep --no-color -z -n -a -e '' > "$work/raw" 2>/dev/null || rc=$?
   [ "$rc" -le 1 ] || die "git grep failed"
   tr '\000' '\001' < "$work/raw" | awk -v idx="$work/index" -v out="$work/content" '
     {
@@ -265,7 +265,9 @@ parse_diff() {
 }
 
 git_diff() {
-  git -c core.quotePath=false diff -U0 --no-color --no-ext-diff --no-textconv \
+  # --text: a file git treats as binary (a NUL byte, or -diff in .gitattributes)
+  # would otherwise show only "Binary files differ" and never be scanned.
+  git -c core.quotePath=false diff -U0 --text --no-color --no-ext-diff --no-textconv \
     --src-prefix=a/ --dst-prefix=b/ "$@"
 }
 

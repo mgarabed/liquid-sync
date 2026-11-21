@@ -124,6 +124,10 @@ t_generic_rules_cover_required() {
   tree_check "https://user:<password>${at}host and https://couch.example.org/db" url-credentials no
   tree_check "$pw_name=s3cr3t-value" secret-assignment yes
   tree_check "  $pw_name: \"s3cr3t\"" secret-assignment yes
+  tree_check "$(printf 'pass%s' word)=hunter22" secret-assignment yes
+  tree_check "  \"api_$(printf 'tok%s' en)\": \"abcdef\"" secret-assignment yes
+  tree_check "local $(printf 'tok%s' en)=\"\$1\"" secret-assignment no
+  tree_check "$pw_name=\`cat /run/pw\` and \`$pw_name=\`" secret-assignment no
   tree_check "$pw_name=" secret-assignment no
   tree_check "$pw_name=\"\$1\"" secret-assignment no
   # 0001 R4: generic matches show at most 4 characters of the value.
@@ -404,6 +408,25 @@ t_push_new_branch_scans_only_new_commits() {
   expect_rc 0
 }
 
+# 0001 R1, R3: files git treats as binary (a NUL byte, or -diff in
+# .gitattributes) are still scanned, staged and in the tree.
+t_binary_and_nodiff_scanned() {
+  hook_repo binary
+  printf '%s\n' '*.ini -diff' > .gitattributes
+  printf '%s\n' "$pw_name=s3cr3t-value" > cfg.ini
+  printf 'x\000\n%s\n' "$fake_key" > blob.dat
+  git add .gitattributes cfg.ini blob.dat
+  run scripts/leak-check --staged
+  expect_rc 1
+  expect_has "cfg.ini:1: secret-assignment"
+  expect_has "blob.dat:2: tailscale-key"
+  expect_lacks "$fake_key"
+  run scripts/leak-check --tree
+  expect_rc 1
+  expect_has "cfg.ini:1: secret-assignment"
+  expect_has "blob.dat:2: tailscale-key"
+}
+
 # 0001 design: a malformed rules file fails with its own path and line.
 t_malformed_rule_fails() {
   new_repo malformed
@@ -422,7 +445,7 @@ all_tests="generic_rules_cover_required allow_marker_line_only allowlist_file_an
 missing_personal_warns personal_file_perms_warn tree_personal_masked malformed_rule_fails
 staged_generic_blocks staged_personal_blocks_masked install_hooks_idempotent
 precommit_shellcheck_blocks push_blocks_bad_author push_blocks_message_leak
-push_new_branch_scans_only_new_commits"
+push_new_branch_scans_only_new_commits binary_and_nodiff_scanned"
 
 selected=${*:-$all_tests}
 failed=0
