@@ -2,14 +2,14 @@
 id: 0001
 title: Block personal and secret leaks before commit and push
 type: chore
-status: draft
+status: accepted
 risk: low
-tier: 
+tier: high
 priority: P1
 author: Mike Garabedian
 created: 2026-11-21
-branch:
-pr:
+branch: 
+pr: 
 ---
 # Intent: Block personal and secret leaks before commit and push
 
