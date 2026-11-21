@@ -224,9 +224,47 @@ build_tree_input() {
     {
       a = index($0, "\001"); path = substr($0, 1, a - 1); rest = substr($0, a + 1)
       b = index(rest, "\001"); n = substr(rest, 1, b - 1)
-      print "-\t" path "\t" n > idx
-      print substr(rest, b + 1) > out
+      print "-\t" path "\t" n >> idx
+      print substr(rest, b + 1) >> out
     }'
+}
+
+# parse_diff <label>: read a unified diff (-U0, a/ b/ prefixes) on stdin and
+# append its added lines to the scan input, with their new-file line numbers.
+parse_diff() {
+  awk -v label="$1" -v idx="$work/index" -v out="$work/content" '
+    /^diff --git / { header = 1; path = ""; next }
+    /^@@ / {
+      header = 0
+      if (match($0, /\+[0-9]+/)) line = substr($0, RSTART + 1, RLENGTH - 1) + 0
+      next
+    }
+    header {
+      if (substr($0, 1, 4) == "+++ ") {
+        p = substr($0, 5)
+        if (p ~ /^".*"$/) p = substr(p, 2, length(p) - 2)
+        if (p == "/dev/null") path = ""
+        else { sub(/^b\//, "", p); path = p }
+      }
+      next
+    }
+    /^\+/ {
+      if (path != "") {
+        print label "\t" path "\t" line >> idx
+        print substr($0, 2) >> out
+      }
+      line++
+    }'
+}
+
+git_diff() {
+  git -c core.quotePath=false diff -U0 --no-color --no-ext-diff --no-textconv \
+    --src-prefix=a/ --dst-prefix=b/ "$@"
+}
+
+build_staged_input() {
+  git_diff --cached > "$work/diff" || die "git diff --cached failed"
+  parse_diff - < "$work/diff"
 }
 
 load_generic_rules
@@ -235,6 +273,7 @@ load_allowlist
 
 case "$mode" in
   tree) build_tree_input ;;
+  staged) build_staged_input ;;
 esac
 
 scan_input

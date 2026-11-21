@@ -52,6 +52,12 @@ new_repo() { # <name>: make and enter an empty repo
   git init -q -b main
 }
 
+hook_repo() { # <name>: a repo with this checkout's scripts and hooks installed
+  new_repo "$1"
+  cp -R "$repo/scripts" "$repo/.githooks" .
+  scripts/install-hooks >/dev/null
+}
+
 # run <cmd...>: sets $out (stdout+stderr) and $rc without tripping set -e.
 run() {
   rc=0
@@ -121,6 +127,14 @@ t_allow_marker_line_only() {
   expect_rc 1
   expect_has "f.txt:2: private-ipv4"
   case "$out" in *"f.txt:1:"*) fail "marked line was reported" "$out" ;; esac
+  # Staged variant: the same rule applies to added lines.
+  hook_repo marker-staged
+  printf '%s\n' "a $(ip 10 0 0 7) # leak-check: allow" "b $(ip 10 0 0 8)" > f.txt
+  git add f.txt
+  run scripts/leak-check --staged
+  expect_rc 1
+  expect_has "f.txt:2: private-ipv4"
+  case "$out" in *"f.txt:1:"*) fail "marked staged line was reported" "$out" ;; esac
 }
 
 # 0001 AC6: an allowlist entry needs both its path glob and its rule to match.
@@ -196,6 +210,67 @@ t_tree_personal_masked() {
   expect_lacks "secretname"
 }
 
+# 0001 AC1: a staged key blocks the commit, reported by file, line and rule, masked.
+t_staged_generic_blocks() {
+  hook_repo staged
+  printf '%s\n' one two three > f.txt
+  git add f.txt
+  git commit -q -m "add f" >/dev/null 2>&1
+  printf '%s\n' one two "key $fake_key" three > f.txt
+  git add f.txt
+  run scripts/leak-check --staged
+  expect_rc 1
+  expect_has "f.txt:3: tailscale-key"
+  expect_lacks "$fake_key"
+  run git commit -m "add key"
+  [ "$rc" -ne 0 ] || fail "commit with a leak succeeded" "$out"
+  expect_has "f.txt:3: tailscale-key"
+  [ "$(git rev-list --count HEAD)" -eq 1 ] || fail "a commit was created"
+  # Only added lines count: removing the line again is clean.
+  git reset -q f.txt
+  printf '%s\n' one two three > f.txt
+  git add f.txt
+  run scripts/leak-check --staged
+  expect_rc 0
+}
+
+# 0001 AC2: a personal match blocks the commit and shows neither value nor pattern.
+t_staged_personal_blocks_masked() {
+  hook_repo staged-personal
+  local pf="$tmp_root/staged-patterns" pattern
+  pattern=$(printf '%s' "$fake_email" | sed 's/[.]/\\./g')
+  printf '%s\n' "$pattern" > "$pf"
+  chmod 600 "$pf"
+  printf '%s\n' "mail $fake_email" > f.txt
+  git add f.txt
+  LIQUID_SYNC_LEAK_PATTERNS=$pf run scripts/leak-check --staged
+  expect_rc 1
+  expect_has "f.txt:1: personal:1"
+  expect_lacks "$fake_email"
+  expect_lacks "$pattern"
+  LIQUID_SYNC_LEAK_PATTERNS=$pf run git commit -m "add mail"
+  [ "$rc" -ne 0 ] || fail "commit with a personal leak succeeded" "$out"
+  expect_lacks "$fake_email"
+}
+
+# 0001 AC11: install-hooks is idempotent.
+t_install_hooks_idempotent() {
+  new_repo install
+  cp -R "$repo/scripts" .
+  run scripts/install-hooks --dry-run
+  expect_rc 0
+  [ -z "$(git config core.hooksPath || true)" ] || fail "--dry-run changed config"
+  run scripts/install-hooks
+  expect_rc 0
+  local before
+  before=$(cat .git/config)
+  run scripts/install-hooks
+  expect_rc 0
+  expect_has "nothing to do"
+  [ "$(git config core.hooksPath)" = ".githooks" ] || fail "core.hooksPath not set"
+  [ "$(cat .git/config)" = "$before" ] || fail "second run changed .git/config"
+}
+
 # 0001 design: a malformed rules file fails with its own path and line.
 t_malformed_rule_fails() {
   new_repo malformed
@@ -211,7 +286,8 @@ t_malformed_rule_fails() {
 
 # --- runner ------------------------------------------------------------------
 all_tests="generic_rules_cover_required allow_marker_line_only allowlist_file_and_rule_only
-missing_personal_warns personal_file_perms_warn tree_personal_masked malformed_rule_fails"
+missing_personal_warns personal_file_perms_warn tree_personal_masked malformed_rule_fails
+staged_generic_blocks staged_personal_blocks_masked install_hooks_idempotent"
 
 selected=${*:-$all_tests}
 failed=0

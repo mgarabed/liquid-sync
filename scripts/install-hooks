@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Enable this repo's git hooks (.githooks/) in the current clone (work item 0001).
+# git can't enable committed hooks by itself: core.hooksPath is local config.
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: scripts/install-hooks [--dry-run]
+
+Set core.hooksPath to .githooks in this clone so the pre-commit and pre-push
+leak checks run. Safe to run again: it changes nothing when already set.
+
+  --dry-run   say what would change, change nothing
+  -h, --help  show this help
+
+Undo with: git config --unset core.hooksPath
+USAGE
+}
+
+dry_run=0
+case "${1:-}" in
+  "") ;;
+  --dry-run) dry_run=1 ;;
+  -h|--help) usage; exit 0 ;;
+  *) printf 'install-hooks: unknown argument: %s (see --help)\n' "$1" >&2; exit 2 ;;
+esac
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  printf 'install-hooks: not inside a git work tree\n' >&2
+  exit 2
+}
+cd "$root"
+
+current=$(git config core.hooksPath || true)
+if [ "$current" = ".githooks" ]; then
+  printf 'install-hooks: core.hooksPath is already .githooks; nothing to do\n'
+  exit 0
+fi
+if [ "$dry_run" -eq 1 ]; then
+  printf 'install-hooks: would set core.hooksPath to .githooks (currently: %s)\n' "${current:-unset}"
+  exit 0
+fi
+git config core.hooksPath .githooks
+printf 'install-hooks: set core.hooksPath to .githooks\n'

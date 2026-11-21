@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# pre-commit hook (work item 0001): block leaks in the staged diff.
+# Enabled by scripts/install-hooks (core.hooksPath=.githooks).
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel)
+"$root/scripts/leak-check" --staged
