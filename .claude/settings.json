@@ -1,0 +1,13 @@
+{
+  "enabledPlugins": {
+    "sdlc@lazysunday": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(sdlc status:*)",
+      "Bash(sdlc verify:*)",
+      "Bash(sdlc show:*)",
+      "Bash(sdlc context:*)"
+    ]
+  }
+}

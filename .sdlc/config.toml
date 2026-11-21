@@ -1,0 +1,95 @@
+# sdlc per-repo configuration. Read by the `sdlc` CLI and the sdlc plugin hooks.
+# Everything here is optional; defaults live in plugins/sdlc/lib/sdlc_core.py.
+stack = "generic"
+
+[verify]
+# `sdlc verify` runs these in order, stops at the first failure, and records the
+# source-tree hash so the Stop hook knows whether the current tree was verified.
+steps = [
+  # { name = "test", run = "make test" },
+  { name = "shellcheck", run = "git ls-files -z | xargs -0 grep -lIE '^#!.*\\b(ba)?sh\\b' -- 2>/dev/null | tr '\\n' '\\0' | xargs -0 -r shellcheck -x" },
+]
+
+# targeted: `sdlc verify --targeted` runs this over the test files the branch changed ({files}, each quoted);
+# patch and small items use it while building. tests: which changed files count as tests.
+# targeted = "uv run pytest -q {files}"
+# tests = ["tests/**"]
+
+# budget: `sdlc verify` adds a warning line when a run takes longer than this many seconds, per profile. The run
+# still passes; it keeps a suite that has grown slow in view.
+# budget = { full = 300, fast = 60 }
+
+[protect]
+# Edits/writes matching these globs are blocked by the protect_paths hook.
+paths = [
+  { glob = "**/node_modules/**", reason = "Vendored dependencies are not edited by hand." },
+  { glob = ".git/**", reason = "Never edit git internals." },
+]
+
+[format]
+# Run after each Edit/Write of a matching file. {file} is replaced with the path.
+# Skipped silently if the tool isn't installed.
+rules = [
+
+]
+
+[secrets]
+# Files the secrets guard lets Claude read/write even though they look sensitive.
+allow_paths = [".env.example", ".env.sample", "*.example"]
+
+[deploy]
+# Bash commands matching these regexes need your explicit approval (hook returns "ask").
+# Defaults (push to main/master, vercel --prod, fastlane release, altool upload, make release/deploy)
+# apply unless you override `ask` here. Force pushes always ask; that check is built in (see [gates]).
+# ask = []
+
+[gates]
+# verify_on_stop: when source changed, block stopping until `sdlc verify` has run on the current
+# tree. A stop after a failing run is allowed but warns you; `sdlc submit` is the hard gate.
+verify_on_stop = true
+plan_drift_warning = true   # warn when changed files aren't listed in plan.md
+# allow: ask checks to switch off for this repo. Names: "unlock" (sdlc unlock), "force" (sdlc submit|start
+# --force), "force-push" and "control-edits" (edits to this file, .claude/settings*.json and CI config).
+# Read only from the default branch's committed copy (origin's, when there is a remote): a change here counts
+# once it is merged (and pushed) there.
+# The human gates (accept, reject, done, merging on the host) and .sdlc/state/ can't be loosened.
+# allow = []
+
+[review]
+# Where work items get reviewed, and what gates "done":
+#   "github": push the item branch, open a PR with gh, merge on GitHub after its checks pass
+#   "gitlab": push the item branch, open an MR with glab, merge on GitLab after its pipeline passes
+#   "local":  review.md in the repo, item branches never pushed (only main goes up)
+# In github/gitlab mode the remote CI is the gatekeeper; local `sdlc verify` is fast feedback.
+# Unset: inferred from the remote URL (github.*, gitlab.*; no remote at all -> local).
+host = "github"
+# remote = "origin"
+
+[tiers]
+# Change tiers (0058): `sdlc submit` refuses an item whose diff outgrows its tier, until you re-tier it (`sdlc tier`).
+# sensitive: globs that need the high tier (protected paths and the control-plane files always count).
+# Size bounds are files and lines changed outside work/.
+# sensitive = ["src/auth/**", "migrations/**"]
+# patch = { max_files = 3, max_lines = 30 }
+# small = { max_files = 10, max_lines = 300 }
+
+[build]
+# worktree: accepting a plan in the herdr status pane runs `sdlc start <id> --worktree` and opens a background
+# herdr tab running `claude "/sdlc:build <id>"` there. false: push /sdlc:build to the Claude beside the pane instead.
+# worktree = true
+
+# [deps]
+# `sdlc dep <id> --check` lists other open items whose plans change the same files as this one's, as candidates for
+# `sdlc dep <id> --on <other>`. Paths under work/ never count; these globs don't either (files every plan touches).
+# ignore = ["CHANGELOG.md", "README.md"]
+
+# [release]
+# `sdlc release` (yours to run: a hook blocks Claude) bumps the version files, writes the changelog from the change
+# notes, tags and pushes. Each item whose branch changes a needs_note path leaves one note, <notes>/<id>.md:
+# frontmatter `bump: patch|minor`, then a one-line summary. `sdlc verify` checks the notes and fails a branch that
+# edits a version file or the changelog by hand. Without this table, none of that runs.
+# files = ["package.json"]          # JSON or TOML, each with a top-level version
+# tag = "v{version}"
+# needs_note = ["src/**", "!src/**/*.test.*"]   # `!` excludes
+# notes = "changes"
+# changelog = "CHANGELOG.md"

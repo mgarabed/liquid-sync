@@ -14,7 +14,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -236,3 +235,6 @@ archive/
 # OS / editor
 .DS_Store
 .obsidian/workspace*.json
+
+# sdlc worktrees
+.worktrees/
