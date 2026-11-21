@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# pre-push hook (work item 0001): block leaks in commits the remote doesn't
+# have yet: added lines, commit messages, and author/committer emails.
+# Enabled by scripts/install-hooks (core.hooksPath=.githooks).
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel)
+exec "$root/scripts/leak-check" --push "$1"

@@ -37,11 +37,11 @@ from: spec.md
   - fail with "shellcheck is not installed" when `command -v shellcheck` fails
 
   Test: `precommit_shellcheck_blocks`, covering both the SC2086 case and the shellcheck-missing case. The missing case runs the hook with `PATH` set to a temporary directory that has symlinks to `git`, `bash`, `grep`, `sed`, `awk`, `head`, `tr` and `env`, but no shellcheck. Run `sdlc verify`.
-- [ ] 4. Push mode. Add `--push <remote>` to `scripts/leak-check`:
+- [x] 4. Push mode. Add `--push <remote>` to `scripts/leak-check`:
   - read the hook's stdin lines and skip deleted refs (all-zero local sha)
   - for each ref, the commits are `git rev-list <local sha> --not --remotes=<remote>`
   - per commit: check `%ae` and `%ce` against `scripts/leak-check.emails`, scan the message (`%B`), and scan added lines from `git show --format= -U0 --no-color --no-ext-diff <sha>` with the same diff parser as step 2
-  - report each match as `<short sha> <file>:<line>`, or `<short sha> message` / `<short sha> author-email`
+  - report each match as `<short sha> <file>:<line>`, or `<short sha> message` / `<short sha> author-email`. As built, message matches carry the message line (`<sha> message:<n>: <rule>`), and email findings never print the email.
 
   Add `.githooks/pre-push`. Tests use a temporary bare remote: `push_blocks_bad_author`, `push_blocks_message_leak` and `push_new_branch_scans_only_new_commits`. Run `sdlc verify`.
 - [ ] 5. Docs and the Linux check:

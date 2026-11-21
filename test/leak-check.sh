@@ -58,6 +58,20 @@ hook_repo() { # <name>: a repo with this checkout's scripts and hooks installed
   scripts/install-hooks >/dev/null
 }
 
+push_repo() { # <name>: hook_repo plus an empty bare remote named origin
+  hook_repo "$1"
+  git init -q --bare "$tmp_root/$1-remote.git"
+  git remote add origin "$tmp_root/$1-remote.git"
+}
+
+remote_head() { # <branch>: the remote's sha for <branch>, or "none"
+  git --git-dir="$(git remote get-url origin)" rev-parse -q --verify "refs/heads/$1" || echo none
+}
+
+quiet_commit() { # <message>: commit staged changes through the hooks, quietly
+  git commit -q -m "$1" >/dev/null 2>&1
+}
+
 # run <cmd...>: sets $out (stdout+stderr) and $rc without tripping set -e.
 run() {
   rc=0
@@ -315,6 +329,81 @@ t_precommit_shellcheck_blocks() {
   expect_rc 0
 }
 
+# 0001 AC3: a commit by a non-allowed author or committer email blocks the push.
+t_push_blocks_bad_author() {
+  push_repo push-author
+  printf 'one\n' > f.txt
+  git add f.txt
+  quiet_commit "first"
+  run git push -q origin main
+  expect_rc 0
+  local good
+  good=$(git rev-parse HEAD)
+  printf 'two\n' >> f.txt
+  git add f.txt
+  GIT_AUTHOR_EMAIL=$fake_email quiet_commit "second"
+  run git push -q origin main
+  [ "$rc" -ne 0 ] || fail "push with a bad author email succeeded" "$out"
+  expect_has "author-email: not on the allowed list"
+  expect_lacks "$fake_email"
+  [ "$(remote_head main)" = "$good" ] || fail "the remote ref moved"
+  # The committer email is checked too.
+  git reset -q --hard "$good"
+  printf 'three\n' >> f.txt
+  git add f.txt
+  GIT_COMMITTER_EMAIL=$fake_email quiet_commit "third"
+  run git push -q origin main
+  [ "$rc" -ne 0 ] || fail "push with a bad committer email succeeded" "$out"
+  expect_has "committer-email: not on the allowed list"
+  [ "$(remote_head main)" = "$good" ] || fail "the remote ref moved"
+}
+
+# 0001 AC4: a leak in a commit message blocks the push.
+t_push_blocks_message_leak() {
+  push_repo push-message
+  printf 'one\n' > f.txt
+  git add f.txt
+  quiet_commit "$(printf 'fix sync\n\nworked against %s' "$fake_url")"
+  run git push -q origin main
+  [ "$rc" -ne 0 ] || fail "push with a leak in the message succeeded" "$out"
+  expect_has "message:3: url-credentials"
+  expect_lacks "$fake_url"
+  [ "$(remote_head main)" = none ] || fail "the remote ref was created"
+}
+
+# 0001 AC5: a new branch scans only the commits the remote doesn't have.
+t_push_new_branch_scans_only_new_commits() {
+  push_repo push-branch
+  # main carries a leak that was allowlisted when it was pushed.
+  printf '%s\t%s\n' 'old.txt' private-ipv4 > .leak-allow
+  printf '%s\n' "$(ip 10 9 8 7)" > old.txt
+  git add .leak-allow old.txt
+  quiet_commit "base"
+  run git push -q origin main
+  expect_rc 0
+  # The new branch drops the allowlist entry and adds one clean commit, so a
+  # rescan of main's history would now fail.
+  git checkout -q -b feature
+  printf '# no entries\n' > .leak-allow
+  printf 'clean\n' > new.txt
+  git add .leak-allow new.txt
+  quiet_commit "clean change"
+  run git push -q origin feature
+  expect_rc 0
+  [ "$(remote_head feature)" = "$(git rev-parse HEAD)" ] || fail "feature was not pushed"
+  # A new commit on the branch is still scanned, with its line number.
+  printf '%s\n' clean "$fake_key" > new.txt
+  git add new.txt
+  git commit -q --no-verify -m "leaky change"
+  run git push -q origin feature
+  [ "$rc" -ne 0 ] || fail "push with a leak in a new commit succeeded" "$out"
+  expect_has "new.txt:2: tailscale-key"
+  expect_lacks "$fake_key"
+  # Deleting a remote branch scans nothing and goes through.
+  run git push -q origin --delete feature
+  expect_rc 0
+}
+
 # 0001 design: a malformed rules file fails with its own path and line.
 t_malformed_rule_fails() {
   new_repo malformed
@@ -332,7 +421,8 @@ t_malformed_rule_fails() {
 all_tests="generic_rules_cover_required allow_marker_line_only allowlist_file_and_rule_only
 missing_personal_warns personal_file_perms_warn tree_personal_masked malformed_rule_fails
 staged_generic_blocks staged_personal_blocks_masked install_hooks_idempotent
-precommit_shellcheck_blocks"
+precommit_shellcheck_blocks push_blocks_bad_author push_blocks_message_leak
+push_new_branch_scans_only_new_commits"
 
 selected=${*:-$all_tests}
 failed=0

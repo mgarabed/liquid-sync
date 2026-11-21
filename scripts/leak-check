@@ -45,11 +45,18 @@ export LC_ALL=C
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 rules_file="$script_dir/leak-check.rules"
+emails_file="$script_dir/leak-check.emails"
 
 mode=""
+remote=""
 case "${1:-}" in
   -h|--help) usage; exit 0 ;;
   --tree|--staged) mode=${1#--}; [ $# -eq 1 ] || die "unexpected argument: ${2}" ;;
+  --push)
+    mode=push
+    [ $# -eq 2 ] || die "--push needs exactly one argument: the remote name"
+    remote=$2
+    ;;
   "") usage >&2; exit 2 ;;
   *) die "unknown argument: $1 (see --help)" ;;
 esac
@@ -267,6 +274,68 @@ build_staged_input() {
   parse_diff - < "$work/diff"
 }
 
+allowed_emails=()
+
+load_emails() {
+  [ -r "$emails_file" ] || die "cannot read allowed-emails file $emails_file"
+  local n=0 line rc
+  while IFS= read -r line || [ -n "$line" ]; do
+    n=$((n + 1))
+    case "$line" in ''|'#'*) continue ;; esac
+    rc=0
+    printf '' | grep -E -e "$line" >/dev/null 2>&1 || rc=$?
+    [ "$rc" -le 1 ] || die "$emails_file:$n: invalid regex"
+    allowed_emails+=("$line")
+  done < "$emails_file"
+}
+
+email_allowed() { # <email>
+  local re
+  [ -n "$1" ] || return 1
+  for re in "${allowed_emails[@]+"${allowed_emails[@]}"}"; do
+    printf '%s\n' "$1" | grep -qE -e "$re" && return 0
+  done
+  return 1
+}
+
+# Pre-push stdin: "<local ref> <local sha> <remote ref> <remote sha>" per ref.
+# Only commits the remote doesn't have are scanned (rev-list --not --remotes),
+# so a new branch doesn't rescan history the remote already holds.
+build_push_input() {
+  load_emails
+  local lref lsha
+  : > "$work/commits"
+  while read -r lref lsha _; do
+    [ -n "$lsha" ] || continue
+    case "$lsha" in *[!0]*) ;; *) continue ;; esac # deleted ref
+    git rev-list "$lsha" --not --remotes="$remote" >> "$work/commits" \
+      || die "git rev-list failed for $lref"
+  done
+  local empty_tree sha short parent email kind
+  empty_tree=$(git hash-object -t tree /dev/null)
+  while IFS= read -r sha; do
+    short=$(git rev-parse --short "$sha")
+    # Author and committer emails are checked against the allowed list; the
+    # email itself is never printed (it may be the personal data).
+    for kind in author committer; do
+      if [ "$kind" = author ]; then
+        email=$(git log -1 --format=%ae "$sha")
+      else
+        email=$(git log -1 --format=%ce "$sha")
+      fi
+      if ! email_allowed "$email"; then
+        printf '%s %s-email: not on the allowed list (scripts/leak-check.emails)\n' "$short" "$kind"
+        findings=$((findings + 1))
+      fi
+    done
+    git log -1 --format=%B "$sha" | awk -v label="$short" -v idx="$work/index" -v out="$work/content" '
+      { print label "\tmessage\t" NR >> idx; print >> out }'
+    parent=$(git rev-parse -q --verify "$sha^1" 2>/dev/null) || parent=$empty_tree
+    git_diff "$parent" "$sha" > "$work/diff" || die "git diff failed for $short"
+    parse_diff "$short" < "$work/diff"
+  done < <(awk '!seen[$0]++' "$work/commits")
+}
+
 load_generic_rules
 load_personal_patterns
 load_allowlist
@@ -274,6 +343,7 @@ load_allowlist
 case "$mode" in
   tree) build_tree_input ;;
   staged) build_staged_input ;;
+  push) build_push_input ;;
 esac
 
 scan_input
