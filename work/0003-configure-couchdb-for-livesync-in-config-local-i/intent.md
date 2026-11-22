@@ -11,7 +11,7 @@ created: 2026-11-21
 branch: work/0003-configure-couchdb-for-livesync-in-config-local-i
 pr: 5
 depends: 0002, 0004
-spec_hash: requirements=d36f9efcec51;acceptance-criteria=2dfffc02ebb6;areas-of-concern=2be907f42787
+spec_hash: requirements=d36f9efcec51;acceptance-criteria=0f393705e26a;areas-of-concern=2be907f42787
 started: 2026-11-22T18:51:10+00:00
 submitted: 2026-11-22T21:41:13+00:00
 submitted_verify: full
