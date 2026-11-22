@@ -20,7 +20,7 @@ Evidence files (sample compose, podlet output) live in the session scratchpad, n
   If the owner declines, the evidence steps below use `docker` on Colima instead, and the ADR says so (spec Design).
 
   *As done:* the owner installed Podman 6.1.4 with the official `.pkg` installer and Podman Desktop (podman.io recommends the installer over brew), not `brew install podman`. The installer set up `podman-mac-helper`, which linked `/var/run/docker.sock` to the Podman machine once it started. The owner removed it with `sudo /opt/podman/bin/podman-mac-helper uninstall`, which also removed the symlink. Podman Desktop's Docker compatibility setting is off. The machine (`podman-machine-default`, libkrun, rootful, 4 CPUs, ~2 GiB) was created from Podman Desktop. Afterwards: `docker context show` → `colima`, `docker ps` lists only Colima's containers, and `/var/run/docker.sock` doesn't exist.
-- [ ] 2. **Gather the evidence** in the scratchpad, using pinned image tags only:
+- [x] 2. **Gather the evidence** in the scratchpad, using pinned image tags only:
   - Write a sample `compose.yaml` using only features the draft compose rules allow:
     - `docker.io/library/couchdb:3.5` on `127.0.0.1:15984:5984` (15984 is free; 5984 is avoided so nothing collides with a later real stack)
     - a small sidecar, `docker.io/library/alpine:<pinned>` with a sleep command
@@ -31,6 +31,8 @@ Evidence files (sample compose, podlet output) live in the session scratchpad, n
   - **Conversion:** get podlet's container image name and tag from its README, then run `podman run --rm -v <dir>:/w:Z -w /w <podlet image> compose --pod compose.yaml`. Save the `.container`, `.pod` and `.volume` output.
   - **Validation:** dry-run the output with Podman's quadlet generator inside a pinned `quay.io/podman/stable:<tag>` (e.g. `QUADLET_UNIT_DIRS=/q /usr/libexec/podman/quadlet -dryrun` with the output mounted at `/q`). Capture the exit status and the generated unit names.
   - If podlet rejects a feature the rules allow, tighten the rules and rerun. If the image or the dry-run path doesn't work at all, stop and report back; don't switch options (spec Design).
+
+  *As done:* the sample also bind-mounts a `./conf` directory with `:ro,Z` and sets `mem_limit:`, and its `env_file:` is named `couchdb-vars.txt` (the session's secrets guard blocks `*.env` names). `:Z` works on the Podman machine's macOS mounts. The negative checks behind the compose rules were also run: podlet exits 1 on `${VAR}` (even with the variable set), on `deploy:` and on `profiles:`, so memory limits use `mem_limit:`. A deliberately broken `.container` makes the quadlet dry-run exit 1, which shows the dry-run really validates.
 - [ ] 3. **Write the ADR**, about a page and a half:
   - `Status: accepted` and the date
   - **Context:** Pi 4, a shared homelab host, the Mac running Colima for other projects, and CLAUDE.md's compose rule
