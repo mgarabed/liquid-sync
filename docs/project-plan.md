@@ -42,7 +42,7 @@ every device, unlimited history, multiple vaults, and almost no upkeep.
 | 6 | **Setup URI / QR generator** | Onboarding | Generate an encrypted LiveSync setup URI per vault (LiveSync ships a generator script) and print a terminal QR code for phones. |
 | 7 | **Backup / restore** | Disaster recovery and host moves | CouchDB data snapshot (or replication to a file/second CouchDB) plus archive repos. `restore` brings up a new host from a backup. |
 | 8 | **Health checks** (`doctor`) | Catch silent failures | TLS validity, CouchDB config drift, per-vault doc counts, archiver lag (time since last commit vs last change), last backup age. Later: alert through a push notification. |
-| 9 | **Pi deployment** (`deploy/pi/`) | Production host | Fedora IoT on a USB SSD, Podman quadlets generated from the same container definitions, `podman auto-update`. |
+| 9 | **Pi deployment** (`deploy/pi/`) | Production host | A liquid-sync stack for any Fedora IoT host (the Pi 4 on a USB SSD is the reference), run rootless as a dedicated service user; quadlets generated from `compose.yaml` by podlet; `podman auto-update`. The host OS and other services aren't in this repo. See [ADR 0001](decisions/0001-container-runtime-and-deployment.md). |
 
 ## 4. Key design decisions to make
 
@@ -59,8 +59,9 @@ every device, unlimited history, multiple vaults, and almost no upkeep.
   decrypt, so the server holds the key. That's acceptable for a self-hosted box
   over Tailscale, but it should be a conscious, documented choice in an ADR.
   Keep the passphrase in `.env` or a secrets file, never in git.
-- **D3 — Docker vs Podman locally.** Podman matches the Pi target. Docker
-  Desktop may be smoother on macOS. The compose file must work with both.
+- **D3 — Docker vs Podman locally.** _Resolved:_ Podman machine locally,
+  alongside Colima; the compose file still works with both. See
+  [ADR 0001](decisions/0001-container-runtime-and-deployment.md).
 - **D4 — Archive remote.** Self-hosted Forgejo, GitHub private repos, or both.
 - **D5 — Passphrase handling.** One passphrase per vault, stored in a password
   manager, entered once per device. The setup URI is itself encrypted with a
@@ -181,7 +182,8 @@ videos), and per-device names for conflict attribution.
 
 ### Phase 5 — Backup / restore and the Pi
 - `backup` / `restore` and a scheduled backup
-- `deploy/pi/`: Fedora IoT on a USB SSD, quadlets, `podman auto-update`
+- `deploy/pi/`: a liquid-sync stack for any Fedora IoT host, run rootless;
+  quadlets generated from `compose.yaml` by podlet; `podman auto-update`
 - Host migration drill: laptop → Pi using `restore`, with no client changes
 - Migrate the remaining vaults
 
@@ -211,4 +213,6 @@ videos), and per-device names for conflict attribution.
 - Archive remote: Forgejo on the homelab, GitHub, or both?
 - How long to keep CouchDB history? LiveSync keeps revisions, so periodic
   compaction is needed once git holds the long-term history.
-- Use the same Pi as other homelab services, or a dedicated one?
+- ~~Use the same Pi as other homelab services, or a dedicated one?~~ Shared
+  with other homelab services; the host and other services live in a separate
+  private repo (ADR 0001).

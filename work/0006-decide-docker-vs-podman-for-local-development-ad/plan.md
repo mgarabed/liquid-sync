@@ -46,7 +46,7 @@ Evidence files (sample compose, podlet output) live in the session scratchpad, n
   - **Consequences:** rootless under a dedicated service user (lingering enabled, quadlets in that user's unit path, `podman auto-update` as a user timer), the sidecar in userspace mode with no added capabilities, the 0002 verify step dry-running with `quadlet -dryrun -user`, Spike A's memory check, and the Phase 2 CLI using `podman`
 
   Every claim gets a primary-source link.
-- [ ] 4. **Edit `docs/project-plan.md`:**
+- [x] 4. **Edit `docs/project-plan.md`:**
   - D3: mark it resolved and link `decisions/0001-container-runtime-and-deployment.md`
   - component 9: "a liquid-sync stack for any Fedora IoT host; quadlets generated from `compose.yaml` by podlet; `podman auto-update`"
   - Phase 5: the same wording for its `deploy/pi/` bullet
