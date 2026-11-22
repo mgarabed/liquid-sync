@@ -48,7 +48,8 @@ printf 'user = "%s:%s"\ndata-binary = "{\\"name\\":\\"livesync-test\\",\\"passwo
   | curl -sS --config - -w '\nHTTP %{http_code}\n' -X PUT -H 'Content-Type: application/json' \
     "$COUCH/_users/org.couchdb.user:livesync-test"
 
-# 3. Make the user a member of this database only.
+# 3. Make the user a member of this database only. A 404 here means the
+#    database doesn't exist: run step 1 first.
 as_admin -X PUT "$COUCH/livesync-test/_security" \
   -H 'Content-Type: application/json' \
   -d '{"admins":{"names":[],"roles":[]},"members":{"names":["livesync-test"],"roles":[]}}'
