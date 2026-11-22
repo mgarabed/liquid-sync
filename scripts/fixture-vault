@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# Copy the sample vault fixture to a throwaway folder outside the repo, so
+# Obsidian and LiveSync never write into the committed fixture.
+set -euo pipefail
+
+MARKER=".liquid-sync-fixture-copy"
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/fixture-vault [--to DIR] [--help]
+
+Copies test/fixtures/sample-vault/ to a folder outside the repo and prints
+that folder's path on stdout. Open the copy in Obsidian, never the fixture.
+
+  --to DIR  Copy to DIR instead of a fresh temp dir. DIR must not exist yet,
+            or must be an earlier copy made by this script (it holds the
+            marker file .liquid-sync-fixture-copy), which is replaced.
+  --help    Show this help.
+
+Refuses any target inside this repo or its main checkout.
+EOF
+}
+
+die() { echo "fixture-vault: $*" >&2; exit 1; }
+
+to=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --to) [ $# -ge 2 ] && [ -n "$2" ] || die "--to needs a directory"; to="$2"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; die "unknown argument: $1" ;;
+  esac
+done
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+src="$root/test/fixtures/sample-vault"
+[ -d "$src" ] || die "fixture not found: $src"
+[ ! -e "$src/$MARKER" ] || die "the fixture itself holds $MARKER; remove it"
+
+# Repo roots a copy must stay out of: this checkout and, from a worktree, the
+# main checkout, where a stray copy could still be committed by accident.
+roots=("$root")
+# --git-common-dir may be relative to $root, so it is resolved from there.
+if common="$(git -C "$root" rev-parse --git-common-dir 2>/dev/null)"; then
+  main="$(cd "$root" && cd -- "$common/.." && pwd -P)" \
+    || die "can't resolve the main checkout from '$common'"
+  [ "$main" = "$root" ] || roots+=("$main")
+fi
+
+# Physical absolute path of $1, which may not exist yet (its parent must).
+resolve() {
+  local parent base
+  if [ -d "$1" ] && [ ! -L "$1" ]; then (cd -- "$1" && pwd -P); return; fi
+  parent="$(cd -- "$(dirname -- "$1")" 2>/dev/null && pwd -P)" \
+    || die "parent folder of '$1' does not exist"
+  base="$(basename -- "$1")"
+  [ "$parent" = / ] && echo "/$base" || echo "$parent/$base"
+}
+
+# Dies when $1 is inside, or contains, this checkout or the main checkout.
+assert_outside() {
+  local r
+  for r in "${roots[@]}"; do
+    case "$1/" in
+      "$r"/*) die "refusing '$1': it is inside the repo at $r" ;;
+    esac
+    case "$r/" in
+      "$1"/*) die "refusing '$1': it contains the repo at $r" ;;
+    esac
+  done
+}
+
+if [ -z "$to" ]; then
+  # Check the temp parent first, so a refusal leaves no empty dir behind.
+  tmp_parent="$(cd -- "${TMPDIR:-/tmp}" && pwd -P)" || die "TMPDIR '${TMPDIR:-/tmp}' does not exist"
+  assert_outside "$tmp_parent"
+  dest="$(mktemp -d "$tmp_parent/sample-vault.XXXXXX")"
+  dest="$(cd -- "$dest" && pwd -P)"
+else
+  dest="$(resolve "$to")"
+  [ ! -L "$dest" ] || die "refusing '$to': it is a symlink"
+fi
+assert_outside "$dest"
+
+# An existing --to target is removed only when it is a real directory holding
+# this script's marker, so a folder it didn't create is never deleted.
+if [ -n "$to" ] && [ -e "$dest" ]; then
+  [ -d "$dest" ] || die "refusing '$dest': it exists and is not a directory"
+  [ -f "$dest/$MARKER" ] && [ ! -L "$dest/$MARKER" ] \
+    || die "refusing '$dest': it exists but has no $MARKER, so it isn't a copy this script made"
+  [[ "$dest" == /?* ]] || die "refusing '$dest': not an absolute path"
+  rm -rf "$dest"
+fi
+
+# The marker goes in first, so an interrupted copy can still be replaced.
+mkdir -p "$dest"
+echo "Copy of liquid-sync test/fixtures/sample-vault, made by scripts/fixture-vault." >"$dest/$MARKER"
+cp -R "$src/." "$dest/"
+echo "$dest"
