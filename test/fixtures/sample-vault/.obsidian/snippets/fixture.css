@@ -1,0 +1,4 @@
+/* Fixture snippet: exists to test hidden-file sync, not to look good. */
+.callout[data-callout="note"] {
+  --callout-color: 60, 140, 90;
+}
