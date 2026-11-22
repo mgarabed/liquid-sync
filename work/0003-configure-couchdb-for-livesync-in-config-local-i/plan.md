@@ -38,7 +38,7 @@ from: spec.md
   - `$PODMAN compose up -d`
   - run AC2 (including the mismatch mutation, reverted by re-`PUT`ting the ini's value)
   - run AC3 and AC4
-- [ ] 6. **Write `docs/runbooks/local-sync-test.md`:**
+- [x] 6. **Write `docs/runbooks/local-sync-test.md`:**
   - setup with `read -rs` prompts:
     - create the database
     - create the `_users` doc
