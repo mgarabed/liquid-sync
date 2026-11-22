@@ -62,6 +62,16 @@ from: spec.md
   - run AC7's grep
   - `$PODMAN compose down -v`, then `rm couchdb.env`
   - `sdlc verify` → `verify: PASS`
+  - **What was done differently:**
+    - Admin calls ran inside the container from its own environment variables (the owner approved this). The secrets hook blocks reading the env file in the agent's shell.
+    - The owner deletes the env file. Agents don't `rm` outside /tmp.
+
+## Deviations found during the build
+Besides step 7's admin-first setup:
+- **AC5 status codes.** As the signed-in test user, `/_all_dbs` and `/_node/_local/_config` return `401` "You are not a server admin." on CouchDB 3.5, not `403`. Access is denied either way. The owner chose to amend spec AC5 to "401 or 403 (denied)" (re-accepted).
+- **AC2 revert.** A config API write lands in `local.d/docker.ini`, which a restart keeps, so the mutation was reverted by re-PUTting the ini's value. spec AC2 is amended to match (re-accepted).
+- **AC7 grep.** The spec's grep also matches two pre-existing lines from steps 4 and 5 of this plan, which `git diff` shows as context next to the step ticks. No added line matches.
+- **Check count.** `scripts/check-couchdb-config` checks every `config/*.ini`, so it reports 10 settings: the nine LiveSync settings plus `couchdb/single_node` from `10-single-node.ini`.
 
 ## Risks
 - **The riskiest step is 7, the manual sync.** It depends on LiveSync accepting a pre-created database and a members-only user, which no upstream doc covers. The fallback (database-level admins) is spelled out, and the result feeds Phase 2's `vault add`.
@@ -84,9 +94,9 @@ from: spec.md
 - AC4: `curl -si -X OPTIONS -H 'Origin: app://obsidian.md' -H 'Access-Control-Request-Method: GET' http://127.0.0.1:5984/livesync-test | grep -i '^access-control-allow-'` shows the origin and `credentials: true`. With `Origin: https://example.com`, there's no `access-control-allow-origin` line.
 - AC5: as the test user:
   - `GET /livesync-test` → 200
-  - `GET /_all_dbs` → 403
+  - `GET /_all_dbs` → 401 "You are not a server admin."
   - `GET /other-test` → 403
-  - `GET /_node/_local/_config` → 403
+  - `GET /_node/_local/_config` → 401 "You are not a server admin."
 
   The setup run twice gives 412 or 409 on the second pass, never 5xx.
 - AC6: the owner's ticked checklist is in the PR body, with no secrets.
