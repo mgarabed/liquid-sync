@@ -28,7 +28,7 @@ Evidence files (sample compose, podlet output) live in the session scratchpad, n
     - an `env_file:` holding fake values
   - Check `lsof -nP -iTCP:15984 -sTCP:LISTEN` is empty first.
   - **Local run:** `podman compose up -d`. On this Mac it delegates to the installed `docker-compose` binary, and the spec requires checking where the containers land. Capture `podman ps` (both containers listed) and `docker ps` (neither listed), then `podman compose down -v`.
-  - **Conversion:** get podlet's container image name and tag from its README, then run `podman run --rm -v <dir>:/w:Z -w /w <podlet image> compose --pod compose.yaml`. Save the `.container`, `.pod` and `.volume` output.
+  - **Conversion:** get podlet's container image name and tag from its README, then run `podman run --rm -v <dir>:/w:Z -w /w <podlet image> compose --pod compose.yaml`. Save the `.container`, `.pod` and `.volume` output. *(Superseded in review round 1: the final rules use `podlet compose` without `--pod`, with one `.network`; see the round 1 fix note below.)*
   - **Validation:** dry-run the output with Podman's quadlet generator inside a pinned `quay.io/podman/stable:<tag>` (e.g. `QUADLET_UNIT_DIRS=/q /usr/libexec/podman/quadlet -dryrun` with the output mounted at `/q`). Capture the exit status and the generated unit names.
   - If podlet rejects a feature the rules allow, tighten the rules and rerun. If the image or the dry-run path doesn't work at all, stop and report back; don't switch options (spec Design).
 

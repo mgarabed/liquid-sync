@@ -8,9 +8,9 @@ Work item: `work/0006-decide-docker-vs-podman-for-local-development-ad`
 
 liquid-sync's reference production host is a Raspberry Pi 4 running
 [Fedora IoT](https://docs.fedoraproject.org/en-US/iot/), an image-based OS
-that runs workloads as containers under Podman and systemd. The Pi has 4 GB of
-RAM and is shared with other homelab services, which live in a separate private
-repo. The dev machine is a Mac that already runs Colima with Docker for other
+that runs workloads as containers under Podman and systemd. The owner's Pi is
+the 4 GB model, booting from a USB SSD, and it's shared with other homelab
+services, which live in a separate private repo. The dev machine is a Mac that already runs Colima with Docker for other
 projects. CLAUDE.md requires `compose.yaml` to work with both
 `docker compose` and `podman compose`.
 
@@ -50,15 +50,15 @@ Where the container definitions are kept (the source of truth):
 
 - **Production OS:** Fedora IoT on the Pi 4, booting from a USB SSD. Any Fedora
   IoT host works; nothing in `deploy/` is specific to the Pi.
-- **Rootless:** liquid-sync runs rootless, as a dedicated service user with
-  lingering enabled ([`loginctl enable-linger`](https://www.freedesktop.org/software/systemd/man/latest/loginctl.html)),
+- **Rootless:** liquid-sync runs rootless, as a dedicated service user (no
+  login shell, no sudo, no SSH keys) with lingering enabled ([`loginctl enable-linger`](https://www.freedesktop.org/software/systemd/man/latest/loginctl.html)),
   so its units start at boot without a login session. The quadlets go in that
   user's own rootless unit path, `~/.config/containers/systemd/`
   ([podman-systemd.unit(5)](https://docs.podman.io/en/stable/markdown/podman-systemd.unit.5.html)).
   Quadlet resolves relative `EnvironmentFile=` and bind-mount paths against
   the unit file's directory, so the env file (mode 0600) and config
-  directories are installed next to the quadlets. That keeps secrets in
-  a directory the service user owns, not a root-managed, world-readable one.
+  directories are installed next to the quadlets, in a directory the service
+  user owns. `deploy/` can then install and update them without root.
   Nothing in liquid-sync needs root. Rootless Podman can't bind ports below
   1024 ([rootless.md](https://github.com/containers/podman/blob/main/rootless.md)),
   and liquid-sync doesn't need to. The Tailscale sidecar runs in userspace
@@ -76,15 +76,17 @@ Where the container definitions are kept (the source of truth):
 - **Local runtime:** on the dev Mac, liquid-sync uses
   [Podman machine](https://docs.podman.io/en/stable/markdown/podman-machine-init.1.html)
   and `podman` commands, alongside Colima. Rootless matches production. The
-  evidence below was gathered on a rootful machine, and the rootless
-  dry-run passed too. Other contributors and CI may use `docker compose`.
+  evidence below was gathered on a rootful machine. The rootless dry-run
+  validates unit generation only; rootless runtime is first exercised in
+  0002. Other contributors and CI may use `docker compose`.
 - **Colima coexistence:** see the Local development rules below. Colima stays
   the default engine for `docker`.
 - **Podman compatibility:** proven by a `sdlc verify` step that 0002 adds once
   `compose.yaml` exists. It regenerates the quadlets with podlet, fails on
   any difference from the committed ones, and dry-runs them with
-  `quadlet -dryrun -user`, all in pinned containers (the commands are in
-  Evidence). A real run on the Pi happens in the Phase 5 deployment item.
+  `quadlet -dryrun -user`, all in containers pinned by digest (the commands
+  are in Evidence). The tooling digests are fixed; only runtime images
+  float within their pinned tag, for `podman auto-update`. A real run on the Pi happens in the Phase 5 deployment item.
 - **Compose rules:** the checklist below. 0002 applies it line by line, and
   so does every later change to `compose.yaml`.
 - **Memory budget:** 1 GB for all liquid-sync containers together, set per
@@ -105,8 +107,13 @@ Where the container definitions are kept (the source of truth):
       declared under `networks:`. Services address each other only by
       `container_name`. Podlet maps these to `ContainerName=` and a
       `.network` unit; the bare service name doesn't resolve once quadlet
-      runs the containers.
+      runs the containers. `ports:` apply per container. A service that
+      needs another's network namespace (`network_mode: service:x`) isn't
+      covered here: 0002 tests that podlet maps it before using it.
 - [ ] `:Z` on every bind mount (`./conf:/conf:ro,Z`), for SELinux on Fedora.
+      `:Z` relabels the host directory, so bind-mount only directories
+      liquid-sync owns, never `$HOME`, `/etc` or another shared path.
+      `docker compose` on Colima accepts `:Z` too (tested).
 - [ ] `env_file:` for configuration and secrets; no `${VAR}` interpolation
       anywhere in the file.
 - [ ] `env_file:` and bind-mount sources are relative paths inside the
@@ -119,6 +126,10 @@ Where the container definitions are kept (the source of truth):
 - [ ] Host ports bind to loopback only (`127.0.0.1:<port>:<port>`), and only
       ports at 1024 or above.
 - [ ] A top-level `name:`, so the compose project name is stable.
+- [ ] The Tailscale sidecar uses `tailscale serve` only, never
+      `tailscale funnel`, which would put CouchDB on the public internet. Its
+      auth key is tagged, with a tailnet ACL limiting access to the CouchDB
+      port, and its state volume is treated as secret.
 
 ### Local development
 
@@ -150,7 +161,7 @@ lives in the `containers` GitHub organisation alongside Podman, is
 [MPL-2.0](https://github.com/containers/podlet/blob/main/LICENSE) licensed,
 and publishes multi-arch images at
 [ghcr.io/containers/podlet](https://github.com/containers/podlet/pkgs/container/podlet).
-We only ever run it from that image, pinned to a tag, so nothing gets
+We only ever run it from that image, pinned by digest, so nothing gets
 installed on any host. Its [releases](https://github.com/containers/podlet/releases)
 are slow: v0.3.0 shipped in May 2024, then v0.3.1 in February 2026 and v0.3.2
 in May 2026. Its README cautions that it "is not meant to be an end-all
@@ -198,6 +209,11 @@ colima
 $ podman compose down -v                                # exit 0
 ```
 
+Image digests (multi-arch index) for the verify step to pin:
+
+- `ghcr.io/containers/podlet:v0.3.2@sha256:90cb8214ade9da09b5a8fd93da20f9bfcad5c3ae40093c95c31be8dce29fd22e`
+- `quay.io/podman/stable:v6.1.3@sha256:1d280cfab8e4cdaa221229c121f681c67463fbd82ad2fa6d13fdcf91c6fc747e`
+
 Conversion with podlet (`ghcr.io/containers/podlet:v0.3.2`):
 
 ```console
@@ -220,8 +236,10 @@ $ podman run --rm -v "$SAMPLE/out":/q:Z -e QUADLET_UNIT_DIRS=/q quay.io/podman/s
 ---lssample-sidecar.service---
 ---lssample-pod.service---
 # exit 0; stderr only "Loading source unit file" lines
-$ ... quadlet -dryrun -user                             # rootless: same three units, exit 0
-$ ... quadlet -dryrun    # on a .container with an unknown key
+$ podman run --rm -v "$SAMPLE/out":/q:Z -e QUADLET_UNIT_DIRS=/q quay.io/podman/stable:v6.1.3 /usr/libexec/podman/quadlet -dryrun -user
+# rootless: same three units, exit 0
+$ podman run --rm -v "$BAD":/q:Z -e QUADLET_UNIT_DIRS=/q quay.io/podman/stable:v6.1.3 /usr/libexec/podman/quadlet -dryrun
+# $BAD holds one .container with an unknown key
 quadlet-generator[1]: converting "broken.container": unsupported key 'NotAQuadletKey' in group 'Container' ...
 # exit 1 (negative control: the dry-run really validates)
 ```
@@ -236,15 +254,44 @@ $ podman run --rm --pod <pod> docker.io/library/alpine:3.24 getent hosts couchdb
 ```
 
 So `--pod` is dropped. A second sample gives each service `container_name:`,
-joins one named network, and sets `io.containers.autoupdate: registry`:
+joins one named network, and sets `io.containers.autoupdate: registry`. For
+the compose run, the `couchdb` service ran `alpine:3.24` with `sleep infinity`,
+because CouchDB exits at start without an admin set:
+
+```yaml
+name: lsnet
+services:
+  couchdb:
+    image: docker.io/library/couchdb:3.5
+    container_name: lsnet-couchdb
+    networks: [lsnet]
+    labels:
+      io.containers.autoupdate: registry
+  probe:
+    image: docker.io/library/alpine:3.24
+    container_name: lsnet-probe
+    command: ["sleep", "infinity"]
+    networks: [lsnet]
+    labels:
+      io.containers.autoupdate: registry
+networks:
+  lsnet:
+```
 
 ```console
-$ podman run --rm -v "$SAMPLE":/w:Z -w /w ghcr.io/containers/podlet:v0.3.2 --file out compose compose.yaml
+$ podman run --rm -v "$NET":/w:Z -w /w ghcr.io/containers/podlet:v0.3.2 --file out compose compose.yaml
 Wrote to file: out/couchdb.container      # ContainerName=lsnet-couchdb, AutoUpdate=registry
 Wrote to file: out/probe.container        # Network=lsnet.network
 Wrote to file: out/lsnet.network
-$ ... quadlet -dryrun -user               # exit 0: lsnet-network, couchdb, probe services
-$ getent hosts lsnet-couchdb              # from the probe, on the network quadlet creates
+# exit 0
+$ podman run --rm -v "$NET/out":/q:Z -e QUADLET_UNIT_DIRS=/q quay.io/podman/stable:v6.1.3 /usr/libexec/podman/quadlet -dryrun -user
+---lsnet-network.service---
+---couchdb.service---
+---probe.service---
+# exit 0
+$ podman network create systemd-lsnet
+$ podman run -d --rm --name lsnet-couchdb --network systemd-lsnet docker.io/library/alpine:3.24 sleep 60
+$ podman run --rm --network systemd-lsnet docker.io/library/alpine:3.24 getent hosts lsnet-couchdb
 <ip>       lsnet-couchdb.dns.podman lsnet-couchdb
 $ podman compose up -d && podman exec lsnet-probe getent hosts lsnet-couchdb
 <ip>       lsnet-couchdb.dns.podman lsnet-couchdb
