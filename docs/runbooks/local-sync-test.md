@@ -108,17 +108,22 @@ paste it anywhere.
    - URL `http://127.0.0.1:5984`
    - username `livesync-test`, and the test user's secret from setup
    - database `livesync-test`
-6. Run **Check server requirements**. It's read-only until you confirm a
-   change.
+6. Run **Check server requirements** once as the **server admin**. It reads
+   the whole server config (`/_node/_local/_config`), which only a server
+   admin can read. As `livesync-test` it always stops with "Access forbidden."
+   - Temporarily replace the username and its secret in the form with the
+     CouchDB admin login (`COUCHDB_USER` and `COUCHDB_PASSWORD` in
+     `couchdb.env`), then run the check. It's read-only until you confirm a
+     change.
    - [ ] It reports nothing to change.
-   - If it offers to change a setting, **decline**, and note the key. A change
-     it offers means `config/20-livesync.ini` is wrong, so fix the ini there.
+   - If it offers to change a setting, **decline**, and note the key. With the
+     admin login a fix button really would write the setting. A change it
+     offers means `config/20-livesync.ini` is wrong, so fix the ini there.
      Accepting would write the setting into `local.d/docker.ini`, outside the
      repo, and `scripts/check-couchdb-config` would then report drift.
-   - Some of its checks need a server admin. If it says it can't read the
-     server config as `livesync-test`, record that, and don't switch to the
-     admin login to make it pass. `scripts/check-couchdb-config` checks the
-     same settings as the admin.
+   - [ ] **Put `livesync-test` and its secret back in the form** before going
+     on. The sync must run as the members-only user, or it proves nothing
+     about that user's access.
 7. Choose **Create or connect to database and continue**, then **Restart and
    Initialise Server**, then **I Understand, Overwrite Server**. That's safe
    here: the database is new and the vault is a fixture copy. If **No
