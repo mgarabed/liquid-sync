@@ -33,7 +33,7 @@ from: spec.md
   - exits 1 on any mismatch or curl failure
 
   Run `shellcheck -x`.
-- [ ] 5. **Bring the stack up and prove the server side:**
+- [x] 5. **Bring the stack up and prove the server side:**
   - `cp couchdb.env.example couchdb.env`, with a throwaway admin password; if the secrets hook blocks it, ask the owner to run `!cp couchdb.env.example couchdb.env` and set the password
   - `$PODMAN compose up -d`
   - run AC2 (including the mismatch mutation, reverted by re-`PUT`ting the ini's value)
