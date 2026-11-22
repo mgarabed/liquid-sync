@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+# Compare every setting in config/*.ini with the value the running CouchDB
+# node reports through _node/_local/_config, and fail on any difference.
+# Read-only. It catches drift from any source, such as a config API write by
+# LiveSync's "Check server requirements" fix button, which lands in
+# local.d/docker.ini instead of the repo.
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/check-couchdb-config [--help]
+
+Reads each [section] key = value from config/*.ini and compares it with the
+running node's value at $COUCHDB_URL/_node/_local/_config/<section>/<key>.
+Prints "ok section/key" or "MISMATCH section/key: ...", and exits 1 on any
+mismatch, missing key or connection failure.
+
+The config API is admin-only. Credentials come from $COUCHDB_USER and
+$COUCHDB_PASSWORD if both are set, else from those two lines of couchdb.env
+(which is parsed, never sourced). They're passed to curl on stdin, so they
+never appear in argv or in this script's output.
+
+  COUCHDB_URL   default http://127.0.0.1:5984
+  --help        Show this help.
+EOF
+}
+
+die() { echo "check-couchdb-config: $*" >&2; exit 1; }
+
+for arg in "$@"; do
+  case "$arg" in
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; die "unknown argument: $arg" ;;
+  esac
+done
+
+command -v curl >/dev/null 2>&1 || die "curl not found"
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+ENV_FILE="$root/couchdb.env"
+url="${COUCHDB_URL:-http://127.0.0.1:5984}"
+url="${url%/}"
+
+# Print the value of KEY from couchdb.env without sourcing the file.
+env_value() {
+  local line
+  line="$(grep -E "^$1=" "$ENV_FILE" | tail -n 1)" || return 1
+  line="${line#*=}"
+  # Strip one pair of surrounding quotes, as compose's env_file does.
+  case "$line" in
+    \"*\") line="${line:1:${#line}-2}" ;;
+    \'*\') line="${line:1:${#line}-2}" ;;
+  esac
+  printf '%s' "$line"
+}
+
+user="${COUCHDB_USER:-}"
+pass="${COUCHDB_PASSWORD:-}"
+if [ -z "$user" ] || [ -z "$pass" ]; then
+  [ -r "$ENV_FILE" ] \
+    || die "set COUCHDB_USER and COUCHDB_PASSWORD, or create $ENV_FILE"
+  user="$(env_value COUCHDB_USER)" || die "COUCHDB_USER not found in $ENV_FILE"
+  pass="$(env_value COUCHDB_PASSWORD)" || die "COUCHDB_PASSWORD not found in $ENV_FILE"
+fi
+[ -n "$user" ] && [ -n "$pass" ] || die "COUCHDB_USER or COUCHDB_PASSWORD is empty in the environment and $ENV_FILE"
+
+# A curl config line holding the credentials. Backslashes and double quotes
+# are escaped for curl's quoted-string syntax.
+escape() { local s="${1//\\/\\\\}"; printf '%s' "${s//\"/\\\"}"; }
+curl_auth="user = \"$(escape "$user"):$(escape "$pass")\""
+
+# GET a config value. Prints the response body, then the HTTP status on its
+# own last line. Credentials go to curl on stdin (--config -), never in argv.
+# stdin is redirected per call so curl can't consume the ini loop's input.
+get_config() {
+  printf '%s\n' "$curl_auth" \
+    | curl -sS --max-time 10 --config - -w '\n%{http_code}' "$url/_node/_local/_config/$1/$2"
+}
+
+# Decode a flat JSON string ("...") into its raw value. Config values have no
+# other escapes than \\ and \" in practice; \u and the rest pass through as is.
+json_string() {
+  local s="$1"
+  s="${s#\"}"
+  s="${s%\"}"
+  s="${s//\\\\/$'\x01'}"
+  s="${s//\\\"/\"}"
+  s="${s//$'\x01'/\\}"
+  printf '%s' "$s"
+}
+
+trim() {
+  local s="$1"
+  s="${s#"${s%%[![:space:]]*}"}"
+  s="${s%"${s##*[![:space:]]}"}"
+  printf '%s' "$s"
+}
+
+shopt -s nullglob
+inis=("$root"/config/*.ini)
+[ "${#inis[@]}" -gt 0 ] || die "no config/*.ini files found"
+
+failed=0
+checked=0
+for ini in "${inis[@]}"; do
+  section=""
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="$(trim "$line")"
+    case "$line" in
+      ''|\;*|\#*) continue ;;
+      \[*\]) section="${line:1:${#line}-2}"; continue ;;
+      *=*) ;;
+      *) echo "MISMATCH ${ini#"$root"/}: unparsed line: $line"; failed=1; continue ;;
+    esac
+    [ -n "$section" ] || { echo "MISMATCH ${ini#"$root"/}: key outside a section"; failed=1; continue; }
+    key="$(trim "${line%%=*}")"
+    want="$(trim "${line#*=}")"
+    checked=$((checked + 1))
+
+    if ! resp="$(get_config "$section" "$key" </dev/null)"; then
+      die "can't reach CouchDB at $url"
+    fi
+    status="${resp##*$'\n'}"
+    body="${resp%$'\n'*}"
+    body="$(trim "$body")"
+    case "$status" in
+      200)
+        got="$(json_string "$body")"
+        if [ "$got" = "$want" ]; then
+          echo "ok $section/$key"
+        else
+          echo "MISMATCH $section/$key: expected '$want' got '$got'"
+          failed=1
+        fi
+        ;;
+      404) echo "MISMATCH $section/$key: expected '$want' got no value"; failed=1 ;;
+      401|403) die "CouchDB refused the admin credentials (HTTP $status)" ;;
+      *) die "unexpected HTTP $status reading $section/$key" ;;
+    esac
+  done < "$ini"
+done
+
+[ "$checked" -gt 0 ] || die "no settings found in config/*.ini"
+if [ "$failed" -ne 0 ]; then
+  echo "check-couchdb-config: drift found; fix config/*.ini or the node, then restart" >&2
+  exit 1
+fi
+echo "check-couchdb-config: $checked settings match"

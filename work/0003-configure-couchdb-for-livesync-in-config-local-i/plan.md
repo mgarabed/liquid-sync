@@ -23,7 +23,7 @@ from: spec.md
   If any check fails, stop and report.
 - [x] 2. **Pin the upstream source.** Fetch `utils/couchdb/provision.ts` from `vrtmrz/obsidian-livesync` at the current `main` commit, and record its hash. List the keys and values it PUTs. If the list differs from spec R1 (keys added or removed), stop and report rather than guess.
 - [x] 3. **Write `config/20-livesync.ini`** from that list. Values are written as CouchDB ini values, so the JSON string `"true"` becomes `true`. `cors/origins` is `app://obsidian.md,capacitor://localhost,http://localhost`. The header cites the commit URL.
-- [ ] 4. **Write `scripts/check-couchdb-config`:**
+- [x] 4. **Write `scripts/check-couchdb-config`:**
   - bash, `set -euo pipefail`, `--help`
   - reads `COUCHDB_USER` and `COUCHDB_PASSWORD` from the environment, or else parses only those two keys out of `couchdb.env`, without sourcing it
   - passes them to curl with `--config -` on stdin (`user = "…"`), so they're never in argv
