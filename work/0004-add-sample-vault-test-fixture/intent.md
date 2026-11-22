@@ -66,4 +66,4 @@ small — fixture files plus one script, with no sensitive or control-plane path
 - [x] 1. Write the notes (original filler) covering the syntax and naming cases, and the fixture `README.md` mapping each file to what it exercises.
 - [x] 2. Add a small PNG and a small PDF, both generated or authored here (no third-party content), embedded or linked from a note. Add `.obsidian/app.json` and one CSS snippet.
 - [x] 3. Write `scripts/fixture-vault`: bash with `set -euo pipefail`, `--help`, `--to DIR`, a refusal of in-repo targets, and marker-file replace semantics.
-- [ ] 4. Run the Checks and `sdlc verify`.
+- [x] 4. Run the Checks and `sdlc verify`.
