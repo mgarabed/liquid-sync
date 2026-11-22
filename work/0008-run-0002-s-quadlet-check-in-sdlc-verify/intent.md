@@ -1,21 +1,22 @@
 ---
-id: 0002
-title: Add compose stack with CouchDB 3.5 and .env.example
-type: feature
+id: 0008
+title: Run 0002's quadlet check in sdlc verify
+type: chore
 status: draft
 risk: low
 tier: 
 priority: P2
 author: Mike Garabedian
-created: 2026-11-21
+created: 2026-11-22
 branch: 
 pr: 
-depends: 0006
+source: 0002
+depends: 0002
 ---
-# Intent: Add compose stack with CouchDB 3.5 and .env.example
+# Intent: Run 0002's quadlet check in sdlc verify
 
 ## Problem
-No stack exists yet. Need compose.yaml (works with docker and podman compose) running couchdb:3.5 bound to localhost:5984, plus .env.example for admin user/password, vault list and Tailscale auth key (plan Phase 1, first step 1).
+ADR 0001's podlet check (regenerate quadlets, diff, quadlet -dryrun -user) exists as a script from 0002 but isn't a step in .sdlc/config.toml, so sdlc verify doesn't catch compose/quadlet drift; this is control plane, so it needs the high tier.
 
 ## Proposed outcome
 <!-- What "better" looks like, observable from the outside. -->

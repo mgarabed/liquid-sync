@@ -34,7 +34,7 @@ every device, unlimited history, multiple vaults, and almost no upkeep.
 
 | # | Component | Purpose | Notes |
 |---|-----------|---------|-------|
-| 1 | **CouchDB** | Sync backend, one database per vault | `couchdb:3.5`, with the settings LiveSync needs (CORS, `max_document_size`, `max_http_request_size`, `require_valid_user`). Config in `config/local.ini`. |
+| 1 | **CouchDB** | Sync backend, one database per vault | `couchdb:3.5`, with the settings LiveSync needs (CORS, `max_document_size`, `max_http_request_size`, `require_valid_user`). Config in `config/*.ini`, copied into CouchDB's `local.d/` at start. |
 | 2 | **Tailscale access** | Stable private hostname plus HTTPS | `tailscale serve` → CouchDB. Use a dedicated node name (e.g. `liquid-sync`) through a Tailscale sidecar container, so the hostname moves with the stack instead of being tied to the laptop or the Pi. This is what makes host migration transparent. |
 | 3 | **Bootstrap CLI** (`./liquid-sync`) | Single entry point for setup and operations | Bash. Subcommands: `init`, `vault add/list/remove`, `setup-uri`, `migrate in/out`, `backup`, `restore`, `doctor`. Idempotent. |
 | 4 | **Archiver** | CouchDB → Markdown files → git commits | Follows each vault database's `_changes` feed, rebuilds files (LiveSync stores notes as chunks, encrypted when E2EE is on), and commits on a debounce (e.g. 10 minutes of quiet or hourly). Pushes to a private remote. **Approach is undecided, see Spike A.** |
@@ -42,7 +42,7 @@ every device, unlimited history, multiple vaults, and almost no upkeep.
 | 6 | **Setup URI / QR generator** | Onboarding | Generate an encrypted LiveSync setup URI per vault (LiveSync ships a generator script) and print a terminal QR code for phones. |
 | 7 | **Backup / restore** | Disaster recovery and host moves | CouchDB data snapshot (or replication to a file/second CouchDB) plus archive repos. `restore` brings up a new host from a backup. |
 | 8 | **Health checks** (`doctor`) | Catch silent failures | TLS validity, CouchDB config drift, per-vault doc counts, archiver lag (time since last commit vs last change), last backup age. Later: alert through a push notification. |
-| 9 | **Pi deployment** (`deploy/pi/`) | Production host | A liquid-sync stack for any Fedora IoT host (the Pi 4 on a USB SSD is the reference), run rootless as a dedicated service user; quadlets generated from `compose.yaml` by podlet; `podman auto-update`. The host OS and other services aren't in this repo. See [ADR 0001](decisions/0001-container-runtime-and-deployment.md). |
+| 9 | **Pi deployment** (`deploy/`) | Production host | A liquid-sync stack for any Fedora IoT host (the Pi 4 on a USB SSD is the reference), run rootless as a dedicated service user; quadlets generated from `compose.yaml` by podlet; `podman auto-update`. The host OS and other services aren't in this repo. See [ADR 0001](decisions/0001-container-runtime-and-deployment.md). |
 
 ## 4. Key design decisions to make
 
@@ -58,7 +58,7 @@ every device, unlimited history, multiple vaults, and almost no upkeep.
 - **D2 — E2EE vs the archiver.** The archiver needs the vault passphrase to
   decrypt, so the server holds the key. That's acceptable for a self-hosted box
   over Tailscale, but it should be a conscious, documented choice in an ADR.
-  Keep the passphrase in `.env` or a secrets file, never in git.
+  Keep the passphrase in a git-ignored `*.env` file, never in git.
 - **D3 — Docker vs Podman locally.** _Resolved:_ Podman machine locally,
   alongside Colima; the compose file still works with both. See
   [ADR 0001](decisions/0001-container-runtime-and-deployment.md).
@@ -118,7 +118,7 @@ The archive repo is the exit path: a plain Markdown vault plus full history.
   node identity with the stack, or re-register the same node name on the new
   host.
 - Procedure: `backup` on the old host → provision the new host
-  (`deploy/pi/`) → `restore` → take the old host offline → `doctor`. Clients
+  (`deploy/`) → `restore` → take the old host offline → `doctor`. Clients
   reconnect with no changes.
 - Alternative with no downtime: CouchDB replication from the old host to the
   new one, then cut the hostname over.
@@ -153,15 +153,17 @@ videos), and per-device names for conflict attribution.
 - README, CLAUDE.md, project plan, .gitignore
 
 ### Phase 1 — Local stack, manual flow
-- `compose.yaml` with CouchDB 3.5 + `config/local.ini`
-- `.env.example` (admin user/password, vault list, Tailscale auth key)
+- `compose.yaml` with CouchDB 3.5 + `config/*.ini`
+- Per-service env files with committed examples: `couchdb.env.example` (admin
+  user/password), and later the vault list and the Tailscale auth key in their
+  own services' files
 - Tailscale sidecar + `tailscale serve` for HTTPS on a dedicated node name
 - Manually connect one Mac and one iPhone to a **test** vault and confirm live
   sync both ways
 - ADR 0001: Docker vs Podman locally
 
 ### Phase 2 — Bootstrap CLI
-- `liquid-sync init`: generate `.env`, start the stack, apply CouchDB config
+- `liquid-sync init`: generate the per-service `*.env` files, start the stack, apply CouchDB config
   through its HTTP API (idempotent), wait for health
 - `vault add/list/remove`: create the database and its user/permissions
 - `setup-uri`: generate the encrypted URI and a terminal QR code
@@ -182,7 +184,7 @@ videos), and per-device names for conflict attribution.
 
 ### Phase 5 — Backup / restore and the Pi
 - `backup` / `restore` and a scheduled backup
-- `deploy/pi/`: a liquid-sync stack for any Fedora IoT host, run rootless;
+- `deploy/`: a liquid-sync stack for any Fedora IoT host, run rootless;
   quadlets generated from `compose.yaml` by podlet; `podman auto-update`
 - Host migration drill: laptop → Pi using `restore`, with no client changes
 - Migrate the remaining vaults
@@ -194,9 +196,9 @@ videos), and per-device names for conflict attribution.
 
 ## 8. First steps (next session)
 
-1. Write `.env.example` and `compose.yaml` (CouchDB 3.5 only) and bring it up
+1. Write `couchdb.env.example` and `compose.yaml` (CouchDB 3.5 only) and bring it up
    locally on port 5984 bound to localhost.
-2. Add `config/local.ini` with the LiveSync-required CouchDB settings and check
+2. Add a `config/*.ini` file with the LiveSync-required CouchDB settings and check
    them against the plugin's current docs.
 3. Create `test/fixtures/sample-vault/` with a few notes, an image and nested
    folders.

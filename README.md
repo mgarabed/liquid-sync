@@ -31,12 +31,32 @@ Self-hosted, low-maintenance sync and history for personal Obsidian vaults.
  └─────────────────────────────────────────────────────┘
 ```
 
+## Run locally
+
+The stack so far is CouchDB alone, bound to `127.0.0.1:5984`. Local
+development uses [Podman machine](https://docs.podman.io/en/stable/markdown/podman-machine-init.1.html)
+(rootless); see [ADR 0001](docs/decisions/0001-container-runtime-and-deployment.md).
+If `podman` isn't on your PATH, it's at `/opt/podman/bin/podman`.
+
+```sh
+cp couchdb.env.example couchdb.env   # then set COUCHDB_PASSWORD; CouchDB won't start without it
+podman compose up -d
+curl -u admin:<password> http://127.0.0.1:5984/_up
+podman compose down                  # add -v to delete the data volume too
+```
+
+After editing `compose.yaml`, regenerate the quadlets and review the diff:
+
+```sh
+scripts/check-quadlets --write
+```
+
 ## Planned CLI
 
 All operations go through one bootstrap script (not yet implemented):
 
 ```sh
-./liquid-sync init                 # create .env, start the stack, configure CouchDB
+./liquid-sync init                 # create env files, start the stack, configure CouchDB
 ./liquid-sync vault add <name>     # create a vault database + archive repo
 ./liquid-sync setup-uri <vault>    # print setup URI / QR code for a device
 ./liquid-sync migrate in <vault>   # guided import from Obsidian Sync / iCloud / git / folder
@@ -50,9 +70,9 @@ All operations go through one bootstrap script (not yet implemented):
 ```
 liquid-sync              # bootstrap/CLI script (bash)
 compose.yaml             # CouchDB + archiver (+ tailscale sidecar), docker or podman
-config/                  # CouchDB local.ini, LiveSync settings presets
+config/                  # CouchDB *.ini (copied into local.d/), LiveSync presets
 archiver/                # CouchDB → files → git service
-deploy/pi/               # Fedora IoT + quadlet units for the Pi
+deploy/quadlets/         # quadlet units generated from compose.yaml (Fedora IoT)
 docs/                    # plan, runbooks, decision records
 ```
 

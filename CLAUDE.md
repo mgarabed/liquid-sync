@@ -33,8 +33,9 @@ ADRs (`NNNN-title.md`).
 - `compose.yaml` must work with both `docker compose` and `podman compose`.
 - Images must be multi-arch (amd64 + arm64). Pin image tags (e.g. `couchdb:3.5`),
   never `latest`.
-- Secrets live in `.env` (git-ignored). Keep `.env.example` current with every
-  new variable. Never print secrets in logs. A setup URI is a secret.
+- Secrets live in per-service `*.env` files (git-ignored), e.g. `couchdb.env`.
+  Keep each one's committed `*.env.example` current with every new variable.
+  Never print secrets in logs. A setup URI is a secret.
 - The CLI script is `bash` with `set -euo pipefail`, passes `shellcheck`, and
   every subcommand is idempotent and supports `--help`. Prefer `--dry-run` for
   anything that changes data.
@@ -52,7 +53,7 @@ ADRs (`NNNN-title.md`).
 ## Don't
 
 - Don't expose CouchDB on a public interface or open router ports.
-- Don't commit vault content, CouchDB data, `.env`, or generated setup URIs.
+- Don't commit vault content, CouchDB data, `*.env` files, or generated setup URIs.
 - Don't run `git` inside client vaults. History lives server-side only.
 
 <!-- sdlc:begin (managed by `sdlc init`; edit freely, keep the markers) -->
