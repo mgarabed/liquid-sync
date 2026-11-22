@@ -112,7 +112,7 @@ paste it anywhere.
    the whole server config (`/_node/_local/_config`), which only a server
    admin can read. As `livesync-test` it always stops with "Access forbidden."
    - Temporarily replace the username and its secret in the form with the
-     CouchDB admin login (`COUCHDB_USER` and `COUCHDB_PASSWORD` in
+     CouchDB admin login (`$COUCHDB_USER` and `$COUCHDB_PASSWORD` from
      `couchdb.env`), then run the check. It's read-only until you confirm a
      change.
    - [ ] It reports nothing to change.
