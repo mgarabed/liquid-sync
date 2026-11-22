@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Regenerate the quadlets from compose.yaml with podlet, fail on any difference
+# from the committed ones in deploy/quadlets/, then dry-run the committed ones
+# with Podman's quadlet generator. See ADR 0001 (docs/decisions/).
+set -euo pipefail
+
+# Tooling images are pinned by digest (ADR 0001 Evidence); bump both together.
+PODLET_IMAGE="ghcr.io/containers/podlet:v0.3.2@sha256:90cb8214ade9da09b5a8fd93da20f9bfcad5c3ae40093c95c31be8dce29fd22e"
+PODMAN_IMAGE="quay.io/podman/stable:v6.1.3@sha256:1d280cfab8e4cdaa221229c121f681c67463fbd82ad2fa6d13fdcf91c6fc747e"
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/check-quadlets [--write] [--help]
+
+Regenerates the quadlets from compose.yaml with podlet and compares them with
+the committed files in deploy/quadlets/, then validates the committed files
+with `quadlet -dryrun -user`. Exits non-zero on any difference or error.
+
+  --write   Replace deploy/quadlets/ with freshly generated files, then
+            validate them. Use after editing compose.yaml.
+  --help    Show this help.
+
+Set PODMAN to the podman binary if it isn't on PATH
+(the macOS .pkg installer puts it at /opt/podman/bin/podman).
+EOF
+}
+
+die() { echo "check-quadlets: $*" >&2; exit 1; }
+
+write=0
+for arg in "$@"; do
+  case "$arg" in
+    --write) write=1 ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; die "unknown argument: $arg" ;;
+  esac
+done
+
+PODMAN="${PODMAN:-podman}"
+command -v "$PODMAN" >/dev/null 2>&1 \
+  || die "podman not found ('$PODMAN'); set PODMAN=/opt/podman/bin/podman or add it to PATH"
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+committed="$root/deploy/quadlets"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+# Stage only what podlet needs. The env file is the committed example under the
+# real name, so the check never reads a real secret.
+mkdir -p "$tmp/src/out"
+cp "$root/compose.yaml" "$tmp/src/"
+cp -R "$root/config" "$tmp/src/"
+cp "$root/couchdb.env.example" "$tmp/src/couchdb.env"
+
+if ! "$PODMAN" run --rm -v "$tmp/src:/w:Z" -w /w "$PODLET_IMAGE" \
+    --file out compose compose.yaml >"$tmp/podlet.log" 2>&1; then
+  cat "$tmp/podlet.log" >&2
+  die "podlet failed to convert compose.yaml"
+fi
+
+failed=()
+
+if [ "$write" -eq 1 ]; then
+  rm -rf "$committed"
+  mkdir -p "$committed"
+  cp "$tmp/src/out/"* "$committed/"
+  for f in "$committed"/*; do echo "check-quadlets: wrote ${f#"$root/"}"; done
+elif ! diff -r "$tmp/src/out" "$committed" >&2; then
+  echo "check-quadlets: deploy/quadlets/ differs from podlet output; run scripts/check-quadlets --write and review the diff" >&2
+  failed+=(diff)
+fi
+
+# The dry-run runs even after a diff failure, so both problems are reported.
+mkdir -p "$tmp/q"
+cp "$committed/"* "$tmp/q/"
+if ! "$PODMAN" run --rm -v "$tmp/q:/q:Z" -e QUADLET_UNIT_DIRS=/q "$PODMAN_IMAGE" \
+    /usr/libexec/podman/quadlet -dryrun -user >"$tmp/dryrun.log" 2>&1; then
+  # Show the generator's errors; fall back to the whole log if there are none.
+  grep 'quadlet-generator' "$tmp/dryrun.log" >&2 || cat "$tmp/dryrun.log" >&2
+  echo "check-quadlets: quadlet -dryrun -user rejected deploy/quadlets/" >&2
+  failed+=(dry-run)
+fi
+
+[ "${#failed[@]}" -eq 0 ] || die "FAILED: ${failed[*]}"
+echo "check-quadlets: OK"
