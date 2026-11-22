@@ -56,7 +56,7 @@ scripts/check-quadlets --write
 All operations go through one bootstrap script (not yet implemented):
 
 ```sh
-./liquid-sync init                 # create .env, start the stack, configure CouchDB
+./liquid-sync init                 # create env files, start the stack, configure CouchDB
 ./liquid-sync vault add <name>     # create a vault database + archive repo
 ./liquid-sync setup-uri <vault>    # print setup URI / QR code for a device
 ./liquid-sync migrate in <vault>   # guided import from Obsidian Sync / iCloud / git / folder

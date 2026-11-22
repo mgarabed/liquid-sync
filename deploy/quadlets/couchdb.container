@@ -1,7 +1,7 @@
 [Container]
 AutoUpdate=registry
 ContainerName=liquid-sync-couchdb
-Entrypoint=["/bin/sh","-c","cp /liquid-sync/config/*.ini /opt/couchdb/etc/local.d/ && exec /docker-entrypoint.sh /opt/couchdb/bin/couchdb"]
+Entrypoint=["/bin/sh","-c","cp /liquid-sync/config/*.ini /opt/couchdb/etc/local.d/ && exec tini -- /docker-entrypoint.sh /opt/couchdb/bin/couchdb"]
 EnvironmentFile=couchdb.env
 Image=docker.io/library/couchdb:3.5
 Memory=512mb

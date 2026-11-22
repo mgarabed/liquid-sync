@@ -18,10 +18,12 @@ services:
     # /opt/couchdb under `set -e`, so a read-only bind mount there makes it
     # exit 1 under rootless Podman. Copying also leaves local.d/docker.ini,
     # where the entrypoint writes the admin, writable and last in the chain.
+    # The exec keeps the image's own init (tini) as PID 1, so SIGTERM reaches
+    # CouchDB on stop.
     entrypoint:
       - /bin/sh
       - -c
-      - cp /liquid-sync/config/*.ini /opt/couchdb/etc/local.d/ && exec /docker-entrypoint.sh /opt/couchdb/bin/couchdb
+      - cp /liquid-sync/config/*.ini /opt/couchdb/etc/local.d/ && exec tini -- /docker-entrypoint.sh /opt/couchdb/bin/couchdb
     volumes:
       - couchdb-data:/opt/couchdb/data
       - ./config:/liquid-sync/config:ro,Z

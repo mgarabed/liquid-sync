@@ -53,7 +53,7 @@ ADRs (`NNNN-title.md`).
 ## Don't
 
 - Don't expose CouchDB on a public interface or open router ports.
-- Don't commit vault content, CouchDB data, `.env`, or generated setup URIs.
+- Don't commit vault content, CouchDB data, `*.env` files, or generated setup URIs.
 - Don't run `git` inside client vaults. History lives server-side only.
 
 <!-- sdlc:begin (managed by `sdlc init`; edit freely, keep the markers) -->

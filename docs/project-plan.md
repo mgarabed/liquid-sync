@@ -58,7 +58,7 @@ every device, unlimited history, multiple vaults, and almost no upkeep.
 - **D2 — E2EE vs the archiver.** The archiver needs the vault passphrase to
   decrypt, so the server holds the key. That's acceptable for a self-hosted box
   over Tailscale, but it should be a conscious, documented choice in an ADR.
-  Keep the passphrase in `.env` or a secrets file, never in git.
+  Keep the passphrase in a git-ignored `*.env` file, never in git.
 - **D3 — Docker vs Podman locally.** _Resolved:_ Podman machine locally,
   alongside Colima; the compose file still works with both. See
   [ADR 0001](decisions/0001-container-runtime-and-deployment.md).
@@ -163,7 +163,7 @@ videos), and per-device names for conflict attribution.
 - ADR 0001: Docker vs Podman locally
 
 ### Phase 2 — Bootstrap CLI
-- `liquid-sync init`: generate `.env`, start the stack, apply CouchDB config
+- `liquid-sync init`: generate the per-service `*.env` files, start the stack, apply CouchDB config
   through its HTTP API (idempotent), wait for health
 - `vault add/list/remove`: create the database and its user/permissions
 - `setup-uri`: generate the encrypted URI and a terminal QR code
