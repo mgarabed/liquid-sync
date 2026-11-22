@@ -10,7 +10,7 @@ author: Mike Garabedian
 created: 2026-11-21
 branch: 
 pr: 
-depends: 0001
+depends: 
 ---
 # Intent: Add sample vault test fixture
 
