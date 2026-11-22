@@ -11,7 +11,7 @@ created: 2026-11-21
 branch: work/0006-decide-docker-vs-podman-for-local-development-ad
 pr: 
 depends: 
-spec_hash: requirements=964f6cddf43a;acceptance-criteria=fc130b1ba8f1;areas-of-concern=e81742b90870
+spec_hash: requirements=964f6cddf43a;acceptance-criteria=5342665653cb;areas-of-concern=1f238826fd48
 started: 2026-11-22T16:03:39+00:00
 ---
 # Intent: Choose the container runtime and deployment model (ADR 0001)
