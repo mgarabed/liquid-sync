@@ -1,0 +1,85 @@
+---
+id: 0006
+title: Choose the container runtime and deployment model (ADR 0001)
+stage: plan
+from: spec.md
+---
+# Plan: Choose the container runtime and deployment model (ADR 0001)
+
+## Files that change
+- `docs/decisions/0001-container-runtime-and-deployment.md` (new): the ADR. It's the first one in the repo and sets the format.
+- `docs/project-plan.md` (edit): only D3, component 9, Phase 5 and the open-questions list (spec R9). The `deploy/pi/` path name stays as it is. Only its description changes, so section 5.3's mention of it needs no edit.
+
+Evidence files (sample compose, podlet output) live in the session scratchpad, not the repo. Their content is quoted in the ADR's Evidence block.
+
+## Order of work
+- [ ] 1. **Install Podman, with the owner's approval.** Ask first, and propose `brew install podman`. Don't install Podman Desktop or `podman-mac-helper`. Before installing, record `docker context show` (expected: `colima`). Then:
+  - `podman machine init --cpus 2 --memory 2048`, then `podman machine start`
+  - confirm `podman info` works, and that `docker context show` still prints `colima` and `docker ps` still lists only Colima's containers
+
+  If the owner declines, the evidence steps below use `docker` on Colima instead, and the ADR says so (spec Design).
+- [ ] 2. **Gather the evidence** in the scratchpad, using pinned image tags only:
+  - Write a sample `compose.yaml` using only features the draft compose rules allow:
+    - `docker.io/library/couchdb:3.5` on `127.0.0.1:15984:5984` (15984 is free; 5984 is avoided so nothing collides with a later real stack)
+    - a small sidecar, `docker.io/library/alpine:<pinned>` with a sleep command
+    - a named volume
+    - an `env_file:` holding fake values
+  - Check `lsof -nP -iTCP:15984 -sTCP:LISTEN` is empty first.
+  - **Local run:** `podman compose up -d`. On this Mac it delegates to the installed `docker-compose` binary, and the spec requires checking where the containers land. Capture `podman ps` (both containers listed) and `docker ps` (neither listed), then `podman compose down -v`.
+  - **Conversion:** get podlet's container image name and tag from its README, then run `podman run --rm -v <dir>:/w:Z -w /w <podlet image> compose --pod compose.yaml`. Save the `.container`, `.pod` and `.volume` output.
+  - **Validation:** dry-run the output with Podman's quadlet generator inside a pinned `quay.io/podman/stable:<tag>` (e.g. `QUADLET_UNIT_DIRS=/q /usr/libexec/podman/quadlet -dryrun` with the output mounted at `/q`). Capture the exit status and the generated unit names.
+  - If podlet rejects a feature the rules allow, tighten the rules and rerun. If the image or the dry-run path doesn't work at all, stop and report back; don't switch options (spec Design).
+- [ ] 3. **Write the ADR**, about a page and a half:
+  - `Status: accepted` and the date
+  - **Context:** Pi 4, a shared homelab host, the Mac running Colima for other projects, and CLAUDE.md's compose rule
+  - **Options:** A, B and C, each with its cost and what it gives up, linked to sources
+  - **Decision:** labelled bullets for all 9 R2 topics: production OS, Colima coexistence, rootful, the shared host and homelab split, source of truth, local runtime, how Podman is proven, compose rules, memory budget
+  - **Compose rules** checklist (`- [ ]` items): fully qualified image names; pinned multi-arch tags; `:Z` on bind mounts; `env_file:` and no `${VAR}`; no `include`, `build`, `deploy`, `profiles`, `extends` or `scale`; host ports on 127.0.0.1; memory limits summing to 1 GB or less
+  - **Local development** rules (R10)
+  - the **podlet** justification (R7): what it does, maintenance and licence (checked from its repo), container-only use, and the fall-back if it's abandoned (the committed quadlets stay valid and become hand-maintained, which is option C)
+  - **Evidence** block (R8, R10), with commands, pinned tags and exit codes
+  - **Consequences:** rootful plus the sidecar's `NET_ADMIN`, the 0002 verify step, Spike A's memory check, and the Phase 2 CLI using `podman`
+
+  Every claim gets a primary-source link.
+- [ ] 4. **Edit `docs/project-plan.md`:**
+  - D3: mark it resolved and link `decisions/0001-container-runtime-and-deployment.md`
+  - component 9: "a liquid-sync stack for any Fedora IoT host; quadlets generated from `compose.yaml` by podlet; `podman auto-update`"
+  - Phase 5: the same wording for its `deploy/pi/` bullet
+  - open questions: answer "same Pi…" with "shared with other homelab services; host and other services live in a separate private repo (ADR 0001)"
+
+  Nothing else in the plan changes.
+- [ ] 5. **Check and verify:**
+  - the AC4 URL check, the AC5 leak grep and the AC1/AC2/AC6 greps
+  - `docker context show` → `colima` (AC10)
+  - `sdlc verify`
+
+## Risks
+- **The riskiest step is 1**, the only change outside the repo. Podman could take over the Docker socket and break the owner's Colima projects.
+  - Mitigations: use the CLI only (no Podman Desktop or `podman-mac-helper`), record `docker context show` before and after, and check `docker ps` still shows Colima's containers.
+  - Undo: `podman machine rm -f && brew uninstall podman`.
+  - The standing rule to ask before installing software applies, and the step does ask.
+- **`podman compose` delegates to `/opt/homebrew/bin/docker-compose`.** If it doesn't point that binary at Podman's socket, the sample could land in Colima. Step 2 checks exactly this. If it happens, the ADR records the fix: set `PODMAN_COMPOSE_PROVIDER` or the `compose_providers` setting, or use `podman-compose`, and the coexistence rules get updated.
+- **Podlet's compose support is narrower than compose**, with no interpolation. The sample is deliberately written to the rules, so a podlet failure means the rules need tightening, not that the decision is wrong. If podlet can't convert even the minimal sample, that's a stop-and-report.
+- **Unverified so far:** podlet's image name, maintenance status and licence (only the GitHub repo was seen during spec), and the quadlet dry-run path inside `quay.io/podman/stable`. Steps 2 and 3 check them, and nothing in the ADR states them unchecked.
+- **Link rot (AC4):** some docs links from spec research are locale mirrors. The ADR uses English canonical URLs.
+- **Out of scope by decision:** Pi clock and RTC guidance, and anything about the homelab repo.
+- **Considered and rejected:** committing the sample compose as a fixture (0002 owns the real `compose.yaml`), and running the evidence in CI (no CI exists yet, and this is a one-off decision record).
+- **Overlaps:** `sdlc dep 0006 --check` (run after this plan was written). 0002 already depends on 0006.
+
+## Proof
+- AC1: `grep -cE '^## (Context|Options|Decision|Consequences)$' docs/decisions/0001-container-runtime-and-deployment.md` → `4`, and `grep -E '^Status: accepted' …` matches.
+- AC2: one `grep -ciE '<label>'` per R2 topic, each ≥ 1. The labels: Production OS, Rootful, Shared host, Source of truth, Local runtime, Podman compatibility, Compose rules, Memory budget, Colima.
+- AC3: the Options section has `A`, `B` and `C` entries, each with "Costs" and "Gives up" lines.
+- AC4: `grep -oE 'https?://[^) ]+' docs/decisions/0001-*.md | sort -u | xargs -n1 curl -sIL -o /dev/null -w '%{http_code} %{url}\n'` → no 4xx or 5xx.
+- AC5: `git diff main -- docs | grep -E '^\+' | grep -cE '([0-9]{1,3}\.){3}[0-9]{1,3}|\.ts\.net|mercuryrising'` → `0`. The ADR's `127.0.0.1` is loopback, and AC5's regex would flag it, so the ADR writes "loopback (127.0.0.1)" only inside the compose rule. The check excludes `127.0.0.1` explicitly: `grep -v '127\.0\.0\.1'` before the count.
+- AC6: `awk '/^## Compose rules/,/^## [A-Z]/' <adr> | grep -c '^- \[ \]'` ≥ 7.
+- AC7: the ADR contains "podlet" in the Options and Decision sections, and an "Evidence" heading with both commands and `exit 0`.
+- AC8: `git diff main --stat -- docs/project-plan.md`, plus a read of the diff: only the D3, component 9, Phase 5 and open-questions hunks.
+- AC10: `docker context show` → `colima`, and the Evidence block shows the sample in `podman ps` and not in `docker ps`.
+- AC9: `sdlc verify` → `verify: PASS`.
+- **Rollback:**
+  - Repo: `git revert -m 1 <merge sha>` removes the ADR and the plan edits. A wrong decision found later is superseded by ADR 0002+, not edited.
+  - Mac: `podman machine rm -f && brew uninstall podman` removes Podman, leaving Colima untouched.
+
+## Parallel tracks
+<!-- None: a single document plus a small plan edit, done in order. -->
