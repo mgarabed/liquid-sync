@@ -11,6 +11,7 @@ created: 2026-11-22
 branch: 
 pr: 
 source: 0003
+depends: 0003
 ---
 # Intent: Tighten CouchDB CORS to Obsidian's origins
 
