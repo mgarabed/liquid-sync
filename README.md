@@ -31,6 +31,26 @@ Self-hosted, low-maintenance sync and history for personal Obsidian vaults.
  └─────────────────────────────────────────────────────┘
 ```
 
+## Run locally
+
+The stack so far is CouchDB alone, bound to `127.0.0.1:5984`. Local
+development uses [Podman machine](https://docs.podman.io/en/stable/markdown/podman-machine-init.1.html)
+(rootless); see [ADR 0001](docs/decisions/0001-container-runtime-and-deployment.md).
+If `podman` isn't on your PATH, it's at `/opt/podman/bin/podman`.
+
+```sh
+cp couchdb.env.example couchdb.env   # then set a real COUCHDB_PASSWORD
+podman compose up -d
+curl -u admin:<password> http://127.0.0.1:5984/_up
+podman compose down                  # add -v to delete the data volume too
+```
+
+After editing `compose.yaml`, regenerate the quadlets and review the diff:
+
+```sh
+scripts/check-quadlets --write
+```
+
 ## Planned CLI
 
 All operations go through one bootstrap script (not yet implemented):
@@ -52,7 +72,7 @@ liquid-sync              # bootstrap/CLI script (bash)
 compose.yaml             # CouchDB + archiver (+ tailscale sidecar), docker or podman
 config/                  # CouchDB local.ini, LiveSync settings presets
 archiver/                # CouchDB → files → git service
-deploy/pi/               # Fedora IoT + quadlet units for the Pi
+deploy/quadlets/         # quadlet units generated from compose.yaml (Fedora IoT)
 docs/                    # plan, runbooks, decision records
 ```
 

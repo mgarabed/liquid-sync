@@ -18,7 +18,7 @@ from: spec.md
 - `docs/project-plan.md` (edit): the Phase 1 `.env.example` bullet; `deploy/pi/` becomes `deploy/` in component 9, §5.3 and Phase 5. Nothing else changes.
 
 ## Order of work
-- [ ] 1. **Preflight, read-only:**
+- [x] 1. **Preflight, read-only:**
   - `PODMAN=/opt/podman/bin/podman`, unless `podman` is on PATH
   - `$PODMAN machine inspect` shows `rootful=false` and the machine running
   - `docker context show` prints `colima`
@@ -36,7 +36,7 @@ from: spec.md
   - `$PODMAN compose up -d`, then run AC2, AC3 and AC4
   - If the container fails to start (for example a volume permission error under rootless), read `$PODMAN logs liquid-sync-couchdb` and fix the compose file. Don't switch the machine to rootful.
   - Finish with `$PODMAN compose down -v`
-- [ ] 4. **Generate and commit the quadlets:**
+- [x] 4. **Generate and commit the quadlets:**
   - First try podlet with `restart: unless-stopped` in the compose file. If podlet rejects it, drop it from `compose.yaml` and note it here.
   - Generate into `deploy/quadlets/` with the ADR's digest-pinned podlet command (without `--pod`).
   - Read the output:
@@ -48,17 +48,17 @@ from: spec.md
     - the bind mount is relative and has `:Z`
     - `Network=liquid-sync.network`
   - Record in Risks whether podlet needed `couchdb.env` to exist.
-- [ ] 5. **Write `scripts/check-quadlets`:**
+- [x] 5. **Write `scripts/check-quadlets`:**
   - bash, `set -euo pipefail`, `--help`, `--write`
   - honours `${PODMAN:-podman}`, and if the binary is missing it fails with a message naming `/opt/podman/bin/podman`
   - stages a temp dir (`mktemp -d`, removed by a trap) holding `compose.yaml`, `config/` and `couchdb.env.example` copied as `couchdb.env`
   - runs the podlet and quadlet images by full digest, copied from ADR 0001's Evidence
   - `diff -r` against `deploy/quadlets/`
-  - `quadlet -dryrun -user` on the committed files
+  - `quadlet -dryrun -user` on the committed files. It runs even after a diff failure, and the script fails if either step did, so a corrupted quadlet is shown to fail the dry-run itself (AC7).
   - Then run AC7: the clean pass, the `mem_limit` mutation in a scratch copy, and the corrupted-key mutation, plus `shellcheck -x`.
 - [ ] 6. **Docker compatibility on Colima** (AC6): with the Podman stack down, `docker compose up -d`, AC3's authenticated call, then `docker compose down -v`. Then run AC9.
-- [ ] 7. **Docs:**
-  - the README's "Run locally" section, using `podman` commands only
+- [x] 7. **Docs:**
+  - the README's "Run locally" section, using `podman` commands only, plus a line on `scripts/check-quadlets --write` after editing `compose.yaml`
   - the README layout line
   - the CLAUDE.md Secrets line
   - the `docs/project-plan.md` edits
@@ -79,6 +79,11 @@ from: spec.md
   - mounting the whole `config/` directory over `local.d/` (it hides `docker.ini`)
   - adding the verify step here (0008, high tier)
   - a single `.env` (decided per-service)
+- **Recorded during the build:**
+  - Order: steps 4, 5 and 7 ran before steps 3 and 6, because the secrets guard hook blocks Claude from creating `couchdb.env`, so the owner creates it. The quadlets were generated with `scripts/check-quadlets --write` (the ADR's podlet command, staged in a temp dir), not a separate podlet call.
+  - Podlet does **not** need `couchdb.env` to exist: a run on `compose.yaml` and `config/` alone wrote both files, exit 0. The script still stages the example as `couchdb.env` so that holds if podlet changes.
+  - Podlet maps `restart: unless-stopped` to `[Service] Restart=always`, and `mem_limit: 512m` to `Memory=512mb`. It writes no header. The generated names are `couchdb.container` and `liquid-sync.network`, as planned.
+  - `podman compose config -q` fails until `couchdb.env` exists, because compose resolves `env_file:` at config time.
 - **Overlaps:** `sdlc dep 0002 --check` found none. 0003 builds on `config/` after this item merges.
 
 ## Proof

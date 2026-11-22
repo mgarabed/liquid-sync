@@ -42,7 +42,7 @@ every device, unlimited history, multiple vaults, and almost no upkeep.
 | 6 | **Setup URI / QR generator** | Onboarding | Generate an encrypted LiveSync setup URI per vault (LiveSync ships a generator script) and print a terminal QR code for phones. |
 | 7 | **Backup / restore** | Disaster recovery and host moves | CouchDB data snapshot (or replication to a file/second CouchDB) plus archive repos. `restore` brings up a new host from a backup. |
 | 8 | **Health checks** (`doctor`) | Catch silent failures | TLS validity, CouchDB config drift, per-vault doc counts, archiver lag (time since last commit vs last change), last backup age. Later: alert through a push notification. |
-| 9 | **Pi deployment** (`deploy/pi/`) | Production host | A liquid-sync stack for any Fedora IoT host (the Pi 4 on a USB SSD is the reference), run rootless as a dedicated service user; quadlets generated from `compose.yaml` by podlet; `podman auto-update`. The host OS and other services aren't in this repo. See [ADR 0001](decisions/0001-container-runtime-and-deployment.md). |
+| 9 | **Pi deployment** (`deploy/`) | Production host | A liquid-sync stack for any Fedora IoT host (the Pi 4 on a USB SSD is the reference), run rootless as a dedicated service user; quadlets generated from `compose.yaml` by podlet; `podman auto-update`. The host OS and other services aren't in this repo. See [ADR 0001](decisions/0001-container-runtime-and-deployment.md). |
 
 ## 4. Key design decisions to make
 
@@ -118,7 +118,7 @@ The archive repo is the exit path: a plain Markdown vault plus full history.
   node identity with the stack, or re-register the same node name on the new
   host.
 - Procedure: `backup` on the old host → provision the new host
-  (`deploy/pi/`) → `restore` → take the old host offline → `doctor`. Clients
+  (`deploy/`) → `restore` → take the old host offline → `doctor`. Clients
   reconnect with no changes.
 - Alternative with no downtime: CouchDB replication from the old host to the
   new one, then cut the hostname over.
@@ -154,7 +154,9 @@ videos), and per-device names for conflict attribution.
 
 ### Phase 1 — Local stack, manual flow
 - `compose.yaml` with CouchDB 3.5 + `config/local.ini`
-- `.env.example` (admin user/password, vault list, Tailscale auth key)
+- Per-service env files with committed examples: `couchdb.env.example` (admin
+  user/password), and later the vault list and the Tailscale auth key in their
+  own services' files
 - Tailscale sidecar + `tailscale serve` for HTTPS on a dedicated node name
 - Manually connect one Mac and one iPhone to a **test** vault and confirm live
   sync both ways
@@ -182,7 +184,7 @@ videos), and per-device names for conflict attribution.
 
 ### Phase 5 — Backup / restore and the Pi
 - `backup` / `restore` and a scheduled backup
-- `deploy/pi/`: a liquid-sync stack for any Fedora IoT host, run rootless;
+- `deploy/`: a liquid-sync stack for any Fedora IoT host, run rootless;
   quadlets generated from `compose.yaml` by podlet; `podman auto-update`
 - Host migration drill: laptop → Pi using `restore`, with no client changes
 - Migrate the remaining vaults
