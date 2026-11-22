@@ -11,6 +11,7 @@ created: 2026-11-22
 branch: 
 pr: 
 source: 0002
+depends: 0002
 ---
 # Intent: Run 0002's quadlet check in sdlc verify
 
