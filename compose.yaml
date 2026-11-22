@@ -1,0 +1,28 @@
+# liquid-sync stack. This file is the source of truth: the quadlets in
+# deploy/quadlets/ are generated from it by podlet (scripts/check-quadlets
+# --write). Follow the compose rules in
+# docs/decisions/0001-container-runtime-and-deployment.md for every change.
+name: liquid-sync
+
+services:
+  couchdb:
+    image: docker.io/library/couchdb:3.5
+    container_name: liquid-sync-couchdb
+    networks: [liquid-sync]
+    labels:
+      io.containers.autoupdate: registry
+    env_file: couchdb.env
+    ports: ["127.0.0.1:5984:5984"]
+    volumes:
+      - couchdb-data:/opt/couchdb/data
+      # A single file, not the whole local.d/ directory: the entrypoint writes
+      # the admin to local.d/docker.ini on every start, which must stay writable.
+      - ./config/10-single-node.ini:/opt/couchdb/etc/local.d/10-single-node.ini:ro,Z
+    mem_limit: 512m
+    restart: unless-stopped
+
+networks:
+  liquid-sync:
+
+volumes:
+  couchdb-data:

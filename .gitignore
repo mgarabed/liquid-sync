@@ -224,6 +224,8 @@ __marimo__/
 # --- liquid-sync project-specific ---
 # Secrets
 .env
+*.env
+!*.env.example
 *.setup-uri
 secrets/
 
