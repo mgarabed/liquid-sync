@@ -2,9 +2,9 @@
 id: 0004
 title: Add sample vault test fixture
 type: chore
-status: draft
+status: planned
 risk: low
-tier: 
+tier: small
 priority: P2
 author: Mike Garabedian
 created: 2026-11-21
