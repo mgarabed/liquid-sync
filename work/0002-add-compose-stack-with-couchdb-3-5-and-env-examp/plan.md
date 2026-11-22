@@ -63,7 +63,7 @@ from: spec.md
   - the CLAUDE.md Secrets line
   - the `docs/project-plan.md` edits
   - Then run AC8.
-- [ ] 8. **Clean up and verify:**
+- [x] 8. **Clean up and verify:**
   - `rm couchdb.env`
   - `$PODMAN volume ls` shows no `liquid-sync_*` volume left
   - `sdlc verify` → `verify: PASS`. The shellcheck step now covers `scripts/check-quadlets` too.
