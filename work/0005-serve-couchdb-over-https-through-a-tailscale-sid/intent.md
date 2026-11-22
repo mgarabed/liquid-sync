@@ -15,7 +15,7 @@ depends: 0003
 # Intent: Serve CouchDB over HTTPS through a Tailscale sidecar
 
 ## Problem
-Clients need a stable private HTTPS hostname that moves with the stack; add a Tailscale sidecar with a dedicated node name and tailscale serve in front of CouchDB, then confirm a Mac and an iPhone sync a test vault both ways (plan Phase 1, first step 4).
+Clients need a stable private HTTPS hostname that moves with the stack; add a Tailscale sidecar with a dedicated node name and tailscale serve in front of CouchDB, then confirm a Mac and an iPhone sync a test vault both ways (plan Phase 1, first step 4). ADR 0001 runs the sidecar rootless in userspace networking (no `/dev/net/tun` or added capabilities); this item must prove `tailscale serve` works in that mode, or reopen ADR 0001 (moved here from 0002).
 
 ## Proposed outcome
 <!-- What "better" looks like, observable from the outside. -->
