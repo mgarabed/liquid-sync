@@ -2,7 +2,7 @@
 id: 0006
 title: Choose the container runtime and deployment model (ADR 0001)
 type: chore
-status: accepted
+status: planned
 risk: low
 tier: standard
 priority: P2
@@ -11,6 +11,7 @@ created: 2026-11-21
 branch: 
 pr: 
 depends: 
+spec_hash: requirements=964f6cddf43a;acceptance-criteria=fc130b1ba8f1;areas-of-concern=e81742b90870
 ---
 # Intent: Choose the container runtime and deployment model (ADR 0001)
 
