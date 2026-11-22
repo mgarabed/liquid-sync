@@ -47,7 +47,7 @@ from: spec.md
   - teardown: delete the database and the user doc
 
   Then run the setup steps twice (idempotent), and run AC5 as the test user, creating `other-test` as the admin first.
-- [ ] 7. **Owner's manual test: pause here.** Hand the owner the runbook's checklist, and wait for their ticked result and the members-or-admins answer.
+- [x] 7. **Owner's manual test: pause here.** Hand the owner the runbook's checklist, and wait for their ticked result and the members-or-admins answer.
   - If LiveSync fails with members only, follow the runbook's fallback (database `_security.admins`), update the runbook to that, and note it in this plan.
   - If LiveSync's server check offers a change, the owner declines it and reports the key. Then fix `config/20-livesync.ini` and repeat from step 5.
   - **Deviation, found in testing (owner agreed).** The first device's setup runs as the **server admin**, and only syncing runs as `livesync-test`:
@@ -55,6 +55,7 @@ from: spec.md
     - "Overwrite Server" deletes and recreates the database (`tryResetRemoteDatabase`). Only a server admin can delete a database, and the recreated database comes back with admin-only `_security`.
 
     So the runbook now does the check and the initialise as the admin, re-applies the `_security` members, then switches the client's login to `livesync-test`. Syncing as a member then worked: `_bulk_docs` and `_local` writes returned 201, with no 401 or 403. **Members is enough for sync, and the database-admins fallback wasn't needed.** Phase 2's `vault add` inherits this: create the database and the user as the admin, and initialise the first device as the admin too.
+  - **Owner's result (2026-11-22, LiveSync plugin 1.0.52 on macOS):** the server check as the admin offered no changes, the initial sync completed, edits synced as `livesync-test`, and `scripts/check-couchdb-config` still passed afterwards.
 - [ ] 8. **README line, clean up and verify:**
   - add the README line
   - `scripts/check-quadlets` exits 0 (compose untouched)
