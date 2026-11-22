@@ -40,11 +40,13 @@ exists), and `_security` is simply rewritten (`200`).
 # 1. The database, created by the server admin.
 as_admin -X PUT "$COUCH/livesync-test"
 
-# 2. The user. No roles, so it's not a server admin. The body comes from a
-#    process substitution so the secret stays out of argv.
-as_admin -X PUT "$COUCH/_users/org.couchdb.user:livesync-test" \
-  -H 'Content-Type: application/json' \
-  --data-binary @<(printf '{"name":"livesync-test","password":"%s","roles":[],"type":"user"}' "$TEST_PASS")
+# 2. The user. No roles, so it's not a server admin. The body travels in the
+#    same curl config on stdin as the admin login, so no secret is in argv.
+#    (Not a <(...) process substitution: macOS's bash 3.2 closes its file
+#    before curl can read it.)
+printf 'user = "%s:%s"\ndata-binary = "{\\"name\\":\\"livesync-test\\",\\"password\\":\\"%s\\",\\"roles\\":[],\\"type\\":\\"user\\"}"\n' "$ADMIN_USER" "$ADMIN_PASS" "$TEST_PASS" \
+  | curl -sS --config - -w '\nHTTP %{http_code}\n' -X PUT -H 'Content-Type: application/json' \
+    "$COUCH/_users/org.couchdb.user:livesync-test"
 
 # 3. Make the user a member of this database only.
 as_admin -X PUT "$COUCH/livesync-test/_security" \
