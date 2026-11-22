@@ -2,16 +2,17 @@
 id: 0006
 title: Choose the container runtime and deployment model (ADR 0001)
 type: chore
-status: planned
+status: building
 risk: low
 tier: standard
 priority: P2
 author: Mike Garabedian
 created: 2026-11-21
-branch: 
+branch: work/0006-decide-docker-vs-podman-for-local-development-ad
 pr: 
 depends: 
 spec_hash: requirements=964f6cddf43a;acceptance-criteria=fc130b1ba8f1;areas-of-concern=e81742b90870
+started: 2026-11-22T16:03:39+00:00
 ---
 # Intent: Choose the container runtime and deployment model (ADR 0001)
 
