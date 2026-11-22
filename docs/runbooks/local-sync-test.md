@@ -73,6 +73,10 @@ The `200` on `livesync-test` shows the credentials themselves work.
 
 ### If LiveSync needs more than membership
 
+In 0003's test (LiveSync at the pinned commit), `members` was enough for
+syncing, and this fallback wasn't needed. It's kept in case a later plugin
+version writes design documents.
+
 Database members can't write design documents. If LiveSync fails on a
 `_design/` write, make the user an admin of **this database only** (still not
 a server admin), and note it in the PR:
@@ -106,45 +110,66 @@ paste it anywhere.
 5. On **Choose a synchronisation remote**, choose **CouchDB**, then
    **Continue to CouchDB setup**, and enter:
    - URL `http://127.0.0.1:5984`
-   - username `livesync-test`, and the test user's secret from setup
+   - the **server admin** login for now (`$COUCHDB_USER` and
+     `$COUCHDB_PASSWORD` from `couchdb.env`). Steps 6 and 7 need it, and
+     step 9 switches to `livesync-test`.
    - database `livesync-test`
-6. Run **Check server requirements** once as the **server admin**. It reads
-   the whole server config (`/_node/_local/_config`), which only a server
-   admin can read. As `livesync-test` it always stops with "Access forbidden."
-   - Temporarily replace the username and its secret in the form with the
-     CouchDB admin login (`$COUCHDB_USER` and `$COUCHDB_PASSWORD` from
-     `couchdb.env`), then run the check. It's read-only until you confirm a
-     change.
+
+   LiveSync's [own server guide](https://github.com/vrtmrz/obsidian-livesync/blob/70899e2fd44277e564173d2c45ee7fde6f499185/docs/setup_own_server.md)
+   splits the same way: provisioning uses the admin, and LiveSync stores a
+   routine login with access to the one database.
+6. Run **Check server requirements**. It reads the whole server config
+   (`/_node/_local/_config`), which only a server admin can read. As
+   `livesync-test` it stops with "Access forbidden." It's read-only until you
+   confirm a change.
    - [ ] It reports nothing to change.
    - If it offers to change a setting, **decline**, and note the key. With the
      admin login a fix button really would write the setting. A change it
      offers means `config/20-livesync.ini` is wrong, so fix the ini there.
      Accepting would write the setting into `local.d/docker.ini`, outside the
      repo, and `scripts/check-couchdb-config` would then report drift.
-   - [ ] **Put `livesync-test` and its secret back in the form** before going
-     on. The sync must run as the members-only user, or it proves nothing
-     about that user's access.
 7. Choose **Create or connect to database and continue**, then **Restart and
    Initialise Server**, then **I Understand, Overwrite Server**. That's safe
    here: the database is new and the vault is a fixture copy. If **No
    Synchronisation Settings Found** appears, choose **Use this device's
    settings**.
    - [ ] The initial sync completes without errors.
-8. Note the database's current sequence, then edit a note in Obsidian and let
-   it sync:
 
-   ```bash
-   as_admin "$COUCH/livesync-test/_changes?descending=true&limit=5"
-   ```
+   "Overwrite Server" deletes the database and creates it again
+   (`tryResetRemoteDatabase` in LiveSync's CouchDB library), and deleting a
+   database needs a server admin. A members-only user, or even an admin of
+   just that database, can't do it. The new database comes back with the
+   default admin-only `_security`, so the test user has lost its access.
+8. Give `livesync-test` its access back by re-running setup step 3 (the
+   `_security` members PUT). It's idempotent.
+9. In LiveSync's settings, change the remote login to `livesync-test` and its
+   secret. Keep the URL and the database.
+   - If it offers to rebuild, fetch or overwrite, **decline**. The database is
+     already initialised, and an overwrite would need the admin again.
+   - Sync can stay paused after a settings change. Run **Replicate now** from
+     the command palette, and check that **Sync Mode** is `LiveSync` (or
+     periodic).
+10. Edit a note or two and let them sync. Then check, as the admin:
 
-   - [ ] A new change appears after the edit (a higher `last_seq`, with a new
-     entry at the top). With E2EE, document ids may be obfuscated, so look
-     for the new entry rather than the note's file name.
-9. Record which `_security` shape worked:
-   - [ ] `members` was enough, or
-   - [ ] the database `admins` fallback was needed (and what failed without it).
-10. Re-run `scripts/check-couchdb-config`.
-   - [ ] It still passes, so nothing wrote to the server config.
+    ```bash
+    as_admin "$COUCH/livesync-test/_changes?descending=true&limit=5"
+    # CouchDB logs to stderr, hence 2>&1. Set --since to cover only the time
+    # since step 9, so step 6's expected 401 isn't counted.
+    podman logs --since 10m liquid-sync-couchdb 2>&1 | grep ' livesync-test ' | grep -cE '(POST /livesync-test/_bulk_docs|PUT /livesync-test/[^ ]*) 201 '
+    podman logs --since 10m liquid-sync-couchdb 2>&1 | grep ' livesync-test ' | grep -E ' (401|403) '
+    ```
+
+    - [ ] New changes appear at the top of `_changes` (a higher sequence).
+      With E2EE and Obfuscate Properties the ids are hashes (`f:…`, `h:…`),
+      so look for new entries rather than the note's file name.
+    - [ ] The log shows writes as `livesync-test` (a count above 0), and the
+      last command prints nothing (no 401 or 403).
+11. Record what each step needed:
+    - [ ] Syncing: `members` was enough, or the database `admins` fallback was
+      needed (and what failed without it).
+    - [ ] Initialising: needed the server admin.
+12. Re-run `scripts/check-couchdb-config`.
+    - [ ] It still passes, so nothing wrote to the server config.
 
 Record the ticked list in the PR. Leave out every credential, and the
 `<throwaway passphrase>` too.

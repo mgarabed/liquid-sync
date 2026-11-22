@@ -50,6 +50,11 @@ from: spec.md
 - [ ] 7. **Owner's manual test: pause here.** Hand the owner the runbook's checklist, and wait for their ticked result and the members-or-admins answer.
   - If LiveSync fails with members only, follow the runbook's fallback (database `_security.admins`), update the runbook to that, and note it in this plan.
   - If LiveSync's server check offers a change, the owner declines it and reports the key. Then fix `config/20-livesync.ini` and repeat from step 5.
+  - **Deviation, found in testing (owner agreed).** The first device's setup runs as the **server admin**, and only syncing runs as `livesync-test`:
+    - LiveSync's "Check server requirements" reads `/_node/_local/_config`, which is admin-only. As the test user it stops with "Access forbidden."
+    - "Overwrite Server" deletes and recreates the database (`tryResetRemoteDatabase`). Only a server admin can delete a database, and the recreated database comes back with admin-only `_security`.
+
+    So the runbook now does the check and the initialise as the admin, re-applies the `_security` members, then switches the client's login to `livesync-test`. Syncing as a member then worked: `_bulk_docs` and `_local` writes returned 201, with no 401 or 403. **Members is enough for sync, and the database-admins fallback wasn't needed.** Phase 2's `vault add` inherits this: create the database and the user as the admin, and initialise the first device as the admin too.
 - [ ] 8. **README line, clean up and verify:**
   - add the README line
   - `scripts/check-quadlets` exits 0 (compose untouched)
