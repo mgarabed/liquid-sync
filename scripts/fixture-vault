@@ -40,37 +40,47 @@ src="$root/test/fixtures/sample-vault"
 # Repo roots a copy must stay out of: this checkout and, from a worktree, the
 # main checkout, where a stray copy could still be committed by accident.
 roots=("$root")
-if common="$(git -C "$root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; then
-  main="$(cd "$common/.." && pwd -P)"
+# --git-common-dir may be relative to $root, so it is resolved from there.
+if common="$(git -C "$root" rev-parse --git-common-dir 2>/dev/null)"; then
+  main="$(cd "$root" && cd -- "$common/.." && pwd -P)" \
+    || die "can't resolve the main checkout from '$common'"
   [ "$main" = "$root" ] || roots+=("$main")
 fi
 
 # Physical absolute path of $1, which may not exist yet (its parent must).
 resolve() {
   local parent base
-  if [ -d "$1" ] && [ ! -L "$1" ]; then (cd "$1" && pwd -P); return; fi
-  parent="$(cd "$(dirname "$1")" 2>/dev/null && pwd -P)" \
+  if [ -d "$1" ] && [ ! -L "$1" ]; then (cd -- "$1" && pwd -P); return; fi
+  parent="$(cd -- "$(dirname -- "$1")" 2>/dev/null && pwd -P)" \
     || die "parent folder of '$1' does not exist"
-  base="$(basename "$1")"
+  base="$(basename -- "$1")"
   [ "$parent" = / ] && echo "/$base" || echo "$parent/$base"
 }
 
+# Dies when $1 is inside, or contains, this checkout or the main checkout.
+assert_outside() {
+  local r
+  for r in "${roots[@]}"; do
+    case "$1/" in
+      "$r"/*) die "refusing '$1': it is inside the repo at $r" ;;
+    esac
+    case "$r/" in
+      "$1"/*) die "refusing '$1': it contains the repo at $r" ;;
+    esac
+  done
+}
+
 if [ -z "$to" ]; then
-  dest="$(mktemp -d "${TMPDIR:-/tmp}/sample-vault.XXXXXX")"
-  dest="$(cd "$dest" && pwd -P)"
+  # Check the temp parent first, so a refusal leaves no empty dir behind.
+  tmp_parent="$(cd -- "${TMPDIR:-/tmp}" && pwd -P)" || die "TMPDIR '${TMPDIR:-/tmp}' does not exist"
+  assert_outside "$tmp_parent"
+  dest="$(mktemp -d "$tmp_parent/sample-vault.XXXXXX")"
+  dest="$(cd -- "$dest" && pwd -P)"
 else
   dest="$(resolve "$to")"
   [ ! -L "$dest" ] || die "refusing '$to': it is a symlink"
 fi
-
-for r in "${roots[@]}"; do
-  case "$dest/" in
-    "$r"/*) die "refusing '$dest': it is inside the repo at $r" ;;
-  esac
-  case "$r/" in
-    "$dest"/*) die "refusing '$dest': it contains the repo at $r" ;;
-  esac
-done
+assert_outside "$dest"
 
 # An existing --to target is removed only when it is a real directory holding
 # this script's marker, so a folder it didn't create is never deleted.
