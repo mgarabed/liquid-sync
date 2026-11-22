@@ -1,13 +1,14 @@
 [Container]
 AutoUpdate=registry
 ContainerName=liquid-sync-couchdb
+Entrypoint=["/bin/sh","-c","cp /liquid-sync/config/*.ini /opt/couchdb/etc/local.d/ && exec /docker-entrypoint.sh /opt/couchdb/bin/couchdb"]
 EnvironmentFile=couchdb.env
 Image=docker.io/library/couchdb:3.5
 Memory=512mb
 Network=liquid-sync.network
 PublishPort=127.0.0.1:5984:5984
 Volume=couchdb-data:/opt/couchdb/data
-Volume=./config/10-single-node.ini:/opt/couchdb/etc/local.d/10-single-node.ini:ro,Z
+Volume=./config:/liquid-sync/config:ro,Z
 
 [Service]
 Restart=always

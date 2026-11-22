@@ -7,7 +7,7 @@ from: spec.md
 # Plan: Add compose stack with CouchDB 3.5 and .env.example
 
 ## Files that change
-- `compose.yaml` (new): the single CouchDB service, written to ADR 0001's compose rules (spec Design).
+- `compose.yaml` (new): the single CouchDB service, written to ADR 0001's compose rules (spec Design), with an entrypoint wrapper that copies `config/*.ini` into `local.d/` (see Risks).
 - `couchdb.env.example` (new): placeholders for `COUCHDB_USER` and `COUCHDB_PASSWORD`.
 - `config/10-single-node.ini` (new): `[couchdb]` `single_node = true`, so the system databases exist.
 - `deploy/quadlets/couchdb.container`, `deploy/quadlets/liquid-sync.network` (new): podlet output, generated, never hand-edited. If podlet names the files differently, the real names replace these here in the same commit.
@@ -26,12 +26,12 @@ from: spec.md
   - `lsof -nP -iTCP:5984 -sTCP:LISTEN` is empty
 
   If any of these fail, stop and report. Don't change the machine or Colima.
-- [ ] 2. **Write the stack files:**
+- [x] 2. **Write the stack files:**
   - `compose.yaml`, `couchdb.env.example` and `config/10-single-node.ini`, as spec Design says
   - the `.gitignore` lines
   - check that `git check-ignore -q couchdb.env` exits 0 and `git check-ignore -q couchdb.env.example` exits 1
   - `$PODMAN compose config -q` exits 0
-- [ ] 3. **Run it on rootless Podman:**
+- [x] 3. **Run it on rootless Podman:**
   - `cp couchdb.env.example couchdb.env`, with a throwaway password; the file is git-ignored and deleted at the end
   - `$PODMAN compose up -d`, then run AC2, AC3 and AC4
   - If the container fails to start (for example a volume permission error under rootless), read `$PODMAN logs liquid-sync-couchdb` and fix the compose file. Don't switch the machine to rootful.
@@ -56,7 +56,7 @@ from: spec.md
   - `diff -r` against `deploy/quadlets/`
   - `quadlet -dryrun -user` on the committed files. It runs even after a diff failure, and the script fails if either step did, so a corrupted quadlet is shown to fail the dry-run itself (AC7).
   - Then run AC7: the clean pass, the `mem_limit` mutation in a scratch copy, and the corrupted-key mutation, plus `shellcheck -x`.
-- [ ] 6. **Docker compatibility on Colima** (AC6): with the Podman stack down, `docker compose up -d`, AC3's authenticated call, then `docker compose down -v`. Then run AC9.
+- [x] 6. **Docker compatibility on Colima** (AC6): with the Podman stack down, `docker compose up -d`, AC3's authenticated call, then `docker compose down -v`. Then run AC9.
 - [x] 7. **Docs:**
   - the README's "Run locally" section, using `podman` commands only, plus a line on `scripts/check-quadlets --write` after editing `compose.yaml`
   - the README layout line
@@ -70,7 +70,8 @@ from: spec.md
 
 ## Risks
 - **The riskiest step is 3: rootless runtime, which is exercised here for the first time.** The entrypoint chowns `/opt/couchdb` as root inside the user namespace, which should work. But `:Z` on a single-file bind mount under the Podman machine's virtiofs share is untested. If relabelling fails on macOS, the fallback is to keep `:Z` (Fedora needs it) and prove the file mount works with a read inside the container. If that also fails, stop and report rather than drop `:Z`, since `:Z` is an ADR rule.
-- **The single-file mount over `local.d/`:** if the entrypoint's `touch local.d/docker.ini` or its admin append fails because of the mount, CouchDB won't start. AC3 catches that. The fallback is mounting the ini at `/opt/couchdb/etc/default.d/` instead, which loads before `local.ini` and still sets `single_node`.
+- **Hit in step 3, and fixed with the owner's approval:** the read-only single-file mount into `local.d/` made the container exit 1 at once with no logs, in a restart loop. The cause: the image's entrypoint runs `find /opt/couchdb \! \( -user couchdb -group couchdb \) -exec chown -f couchdb:couchdb '{}' +` under `set -e`. Under rootless Podman the mounted file appears owned by root, chown fails on the read-only mount, and `find` exits non-zero. The `default.d/` fallback below has the same problem, since it's under `/opt/couchdb` too. Fix: mount `./config:/liquid-sync/config:ro,Z` and override `entrypoint:` to copy `*.ini` into `local.d/`, then exec `/docker-entrypoint.sh /opt/couchdb/bin/couchdb`. Podlet maps it to `Entrypoint=` as a JSON array, and quadlet renders `--entrypoint=[…]`. Spec Areas of concern and Design were updated, so the spec needs re-acceptance.
+- **The single-file mount over `local.d/` (superseded by the item above):** if the entrypoint's `touch local.d/docker.ini` or its admin append fails because of the mount, CouchDB won't start. AC3 catches that. The fallback is mounting the ini at `/opt/couchdb/etc/default.d/` instead, which loads before `local.ini` and still sets `single_node`.
 - **Podlet coverage:** `restart:` and `networks:` with `container_name` are mapped in ADR 0001's Evidence, except `restart:`, which is tried in step 4. A podlet failure on an ADR-allowed feature means the compose rules need tightening, so stop and report.
 - **The Colima step touches the other engine.** It's limited to one project label and `down -v`, and AC9 proves nothing is left behind. It never runs while the Podman stack is up, because both use port 5984.
 - **`couchdb.env` with a real-looking password on disk:** it's throwaway and git-ignored, and deleted in step 8. The secrets guard hook may block writing it. If it does, the owner creates it with `!cp couchdb.env.example couchdb.env`.

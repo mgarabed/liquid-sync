@@ -13,11 +13,18 @@ services:
       io.containers.autoupdate: registry
     env_file: couchdb.env
     ports: ["127.0.0.1:5984:5984"]
+    # config/ is mounted outside /opt/couchdb and its .ini files are copied
+    # into local.d/ at start. The image's entrypoint chowns everything under
+    # /opt/couchdb under `set -e`, so a read-only bind mount there makes it
+    # exit 1 under rootless Podman. Copying also leaves local.d/docker.ini,
+    # where the entrypoint writes the admin, writable and last in the chain.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - cp /liquid-sync/config/*.ini /opt/couchdb/etc/local.d/ && exec /docker-entrypoint.sh /opt/couchdb/bin/couchdb
     volumes:
       - couchdb-data:/opt/couchdb/data
-      # A single file, not the whole local.d/ directory: the entrypoint writes
-      # the admin to local.d/docker.ini on every start, which must stay writable.
-      - ./config/10-single-node.ini:/opt/couchdb/etc/local.d/10-single-node.ini:ro,Z
+      - ./config:/liquid-sync/config:ro,Z
     mem_limit: 512m
     restart: unless-stopped
 
