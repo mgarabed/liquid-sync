@@ -92,21 +92,40 @@ paste it anywhere.
    outside the repo that doesn't exist yet).
 2. Open `<dir>` as a vault in Obsidian, and install and enable
    **Self-hosted LiveSync**.
-3. In LiveSync's setup, choose manual setup with CouchDB:
-   - URI `http://127.0.0.1:5984`
+3. Open onboarding from the **Welcome to Self-hosted LiveSync** notice. These
+   labels follow LiveSync's [quick setup, "Configure CouchDB manually on the
+   first device"](https://github.com/vrtmrz/obsidian-livesync/blob/70899e2fd44277e564173d2c45ee7fde6f499185/docs/quick_setup.md#configure-couchdb-manually-on-the-first-device)
+   at the pinned commit.
+   - Choose **I am setting this up for the first time**, and confirm.
+   - On **Connection Method**, choose **Configure a remote manually**, then
+     **Proceed with manual configuration**. Don't choose "Use a Setup URI".
+     That wants an `obsidian://setuplivesync?settings=…` link, and there isn't
+     one here.
+4. On **End-to-End Encryption**, turn it on with a `<throwaway passphrase>`.
+   **Obfuscate Properties** is optional; on is closer to real use.
+5. On **Choose a synchronisation remote**, choose **CouchDB**, then
+   **Continue to CouchDB setup**, and enter:
+   - URL `http://127.0.0.1:5984`
    - username `livesync-test`, and the test user's secret from setup
    - database `livesync-test`
-4. Turn **End-to-end encryption** on, with a `<throwaway passphrase>`.
-5. Run **Check server requirements** (sometimes "Check database
-   configuration"). It's read-only until you click a fix button.
+6. Run **Check server requirements**. It's read-only until you confirm a
+   change.
    - [ ] It reports nothing to change.
    - If it offers to change a setting, **decline**, and note the key. A change
      it offers means `config/20-livesync.ini` is wrong, so fix the ini there.
      Accepting would write the setting into `local.d/docker.ini`, outside the
      repo, and `scripts/check-couchdb-config` would then report drift.
-6. Start sync (LiveSync mode is fine).
+   - Some of its checks need a server admin. If it says it can't read the
+     server config as `livesync-test`, record that, and don't switch to the
+     admin login to make it pass. `scripts/check-couchdb-config` checks the
+     same settings as the admin.
+7. Choose **Create or connect to database and continue**, then **Restart and
+   Initialise Server**, then **I Understand, Overwrite Server**. That's safe
+   here: the database is new and the vault is a fixture copy. If **No
+   Synchronisation Settings Found** appears, choose **Use this device's
+   settings**.
    - [ ] The initial sync completes without errors.
-7. Note the database's current sequence, then edit a note in Obsidian and let
+8. Note the database's current sequence, then edit a note in Obsidian and let
    it sync:
 
    ```bash
@@ -116,10 +135,10 @@ paste it anywhere.
    - [ ] A new change appears after the edit (a higher `last_seq`, with a new
      entry at the top). With E2EE, document ids may be obfuscated, so look
      for the new entry rather than the note's file name.
-8. Record which `_security` shape worked:
+9. Record which `_security` shape worked:
    - [ ] `members` was enough, or
    - [ ] the database `admins` fallback was needed (and what failed without it).
-9. Re-run `scripts/check-couchdb-config`.
+10. Re-run `scripts/check-couchdb-config`.
    - [ ] It still passes, so nothing wrote to the server config.
 
 Record the ticked list in the PR. Leave out every credential, and the
