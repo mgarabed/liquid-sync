@@ -25,6 +25,8 @@ LiveSync needs CORS, require_valid_user, max_document_size and max_http_request_
 
 ## Constraints
 <!-- Must/must-not: platforms, auth, privacy, perf budgets, deadlines, things not to touch. -->
+- Set `[chttpd] require_valid_user = true`. Since 0002, `couchdb.env.example` leaves `COUCHDB_PASSWORD` empty, so an unedited copy fails closed only because the CouchDB image refuses to start without an admin. `require_valid_user` keeps anonymous requests out even if that upstream behaviour changes. Source: the security pass of 0002's nit review (PR #3), recorded in `work/done/0002-add-compose-stack-with-couchdb-3-5-and-env-examp/plan.md`.
+- Follow 0002's config layout: settings go in a `config/*.ini` file beside `config/10-single-node.ini`. At start, compose's entrypoint wrapper copies them into CouchDB's `local.d/`. The file sorts before `docker.ini`, so the entrypoint's admin file stays last. The `config/local.ini` in this item's title predates that layout.
 
 ## Out of scope
 <!-- Explicitly not doing. -->
