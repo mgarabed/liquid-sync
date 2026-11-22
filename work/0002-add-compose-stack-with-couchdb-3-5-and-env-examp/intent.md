@@ -2,9 +2,9 @@
 id: 0002
 title: Add compose stack with CouchDB 3.5 and .env.example
 type: feature
-status: draft
+status: accepted
 risk: low
-tier: 
+tier: standard
 priority: P2
 author: Mike Garabedian
 created: 2026-11-21
