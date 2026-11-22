@@ -45,6 +45,11 @@ curl -u admin:<password> http://127.0.0.1:5984/_up
 podman compose down                  # add -v to delete the data volume too
 ```
 
+CouchDB is configured for Self-hosted LiveSync by `config/20-livesync.ini`, and
+`scripts/check-couchdb-config` checks that the running node still matches it.
+To test syncing from Obsidian with a throwaway vault, follow
+[the local sync test runbook](docs/runbooks/local-sync-test.md).
+
 After editing `compose.yaml`, regenerate the quadlets and review the diff:
 
 ```sh

@@ -13,7 +13,7 @@ from: spec.md
 - `README.md` (edit): one line in "Run locally" pointing at the runbook and at `scripts/check-couchdb-config`.
 
 ## Order of work
-- [ ] 1. **Preflight, read-only.** Check that:
+- [x] 1. **Preflight, read-only.** Check that:
   - `PODMAN` resolves (falling back to `/opt/podman/bin/podman`)
   - the machine is rootless and running
   - `docker context show` prints `colima`
@@ -21,9 +21,9 @@ from: spec.md
   - `scripts/fixture-vault` exists on main (0004 merged)
 
   If any check fails, stop and report.
-- [ ] 2. **Pin the upstream source.** Fetch `utils/couchdb/provision.ts` from `vrtmrz/obsidian-livesync` at the current `main` commit, and record its hash. List the keys and values it PUTs. If the list differs from spec R1 (keys added or removed), stop and report rather than guess.
-- [ ] 3. **Write `config/20-livesync.ini`** from that list. Values are written as CouchDB ini values, so the JSON string `"true"` becomes `true`. `cors/origins` is `app://obsidian.md,capacitor://localhost,http://localhost`. The header cites the commit URL.
-- [ ] 4. **Write `scripts/check-couchdb-config`:**
+- [x] 2. **Pin the upstream source.** Fetch `utils/couchdb/provision.ts` from `vrtmrz/obsidian-livesync` at the current `main` commit, and record its hash. List the keys and values it PUTs. If the list differs from spec R1 (keys added or removed), stop and report rather than guess.
+- [x] 3. **Write `config/20-livesync.ini`** from that list. Values are written as CouchDB ini values, so the JSON string `"true"` becomes `true`. `cors/origins` is `app://obsidian.md,capacitor://localhost,http://localhost`. The header cites the commit URL.
+- [x] 4. **Write `scripts/check-couchdb-config`:**
   - bash, `set -euo pipefail`, `--help`
   - reads `COUCHDB_USER` and `COUCHDB_PASSWORD` from the environment, or else parses only those two keys out of `couchdb.env`, without sourcing it
   - passes them to curl with `--config -` on stdin (`user = "…"`), so they're never in argv
@@ -33,12 +33,12 @@ from: spec.md
   - exits 1 on any mismatch or curl failure
 
   Run `shellcheck -x`.
-- [ ] 5. **Bring the stack up and prove the server side:**
+- [x] 5. **Bring the stack up and prove the server side:**
   - `cp couchdb.env.example couchdb.env`, with a throwaway admin password; if the secrets hook blocks it, ask the owner to run `!cp couchdb.env.example couchdb.env` and set the password
   - `$PODMAN compose up -d`
   - run AC2 (including the mismatch mutation, reverted by re-`PUT`ting the ini's value)
   - run AC3 and AC4
-- [ ] 6. **Write `docs/runbooks/local-sync-test.md`:**
+- [x] 6. **Write `docs/runbooks/local-sync-test.md`:**
   - setup with `read -rs` prompts:
     - create the database
     - create the `_users` doc
@@ -47,15 +47,31 @@ from: spec.md
   - teardown: delete the database and the user doc
 
   Then run the setup steps twice (idempotent), and run AC5 as the test user, creating `other-test` as the admin first.
-- [ ] 7. **Owner's manual test: pause here.** Hand the owner the runbook's checklist, and wait for their ticked result and the members-or-admins answer.
+- [x] 7. **Owner's manual test: pause here.** Hand the owner the runbook's checklist, and wait for their ticked result and the members-or-admins answer.
   - If LiveSync fails with members only, follow the runbook's fallback (database `_security.admins`), update the runbook to that, and note it in this plan.
   - If LiveSync's server check offers a change, the owner declines it and reports the key. Then fix `config/20-livesync.ini` and repeat from step 5.
-- [ ] 8. **README line, clean up and verify:**
+  - **Deviation, found in testing (owner agreed).** The first device's setup runs as the **server admin**, and only syncing runs as `livesync-test`:
+    - LiveSync's "Check server requirements" reads `/_node/_local/_config`, which is admin-only. As the test user it stops with "Access forbidden."
+    - "Overwrite Server" deletes and recreates the database (`tryResetRemoteDatabase`). Only a server admin can delete a database, and the recreated database comes back with admin-only `_security`.
+
+    So the runbook now does the check and the initialise as the admin, re-applies the `_security` members, then switches the client's login to `livesync-test`. Syncing as a member then worked: `_bulk_docs` and `_local` writes returned 201, with no 401 or 403. **Members is enough for sync, and the database-admins fallback wasn't needed.** Phase 2's `vault add` inherits this: create the database and the user as the admin, and initialise the first device as the admin too.
+  - **Owner's result (2026-11-22, LiveSync plugin 1.0.52 on macOS):** the server check as the admin offered no changes, the initial sync completed, edits synced as `livesync-test`, and `scripts/check-couchdb-config` still passed afterwards.
+- [x] 8. **README line, clean up and verify:**
   - add the README line
   - `scripts/check-quadlets` exits 0 (compose untouched)
   - run AC7's grep
   - `$PODMAN compose down -v`, then `rm couchdb.env`
   - `sdlc verify` → `verify: PASS`
+  - **What was done differently:**
+    - Admin calls ran inside the container from its own environment variables (the owner approved this). The secrets hook blocks reading the env file in the agent's shell.
+    - The owner deletes the env file. Agents don't `rm` outside /tmp.
+
+## Deviations found during the build
+Besides step 7's admin-first setup:
+- **AC5 status codes.** As the signed-in test user, `/_all_dbs` and `/_node/_local/_config` return `401` "You are not a server admin." on CouchDB 3.5, not `403`. Access is denied either way. The owner chose to amend spec AC5 to "401 or 403 (denied)" (re-accepted).
+- **AC2 revert.** A config API write lands in `local.d/docker.ini`, which a restart keeps, so the mutation was reverted by re-PUTting the ini's value. spec AC2 is amended to match (re-accepted).
+- **AC7 grep.** The spec's grep also matches two pre-existing lines from steps 4 and 5 of this plan, which `git diff` shows as context next to the step ticks. No added line matches.
+- **Check count.** `scripts/check-couchdb-config` checks every `config/*.ini`, so it reports 10 settings: the nine LiveSync settings plus `couchdb/single_node` from `10-single-node.ini`.
 
 ## Risks
 - **The riskiest step is 7, the manual sync.** It depends on LiveSync accepting a pre-created database and a members-only user, which no upstream doc covers. The fallback (database-level admins) is spelled out, and the result feeds Phase 2's `vault add`.
@@ -78,9 +94,9 @@ from: spec.md
 - AC4: `curl -si -X OPTIONS -H 'Origin: app://obsidian.md' -H 'Access-Control-Request-Method: GET' http://127.0.0.1:5984/livesync-test | grep -i '^access-control-allow-'` shows the origin and `credentials: true`. With `Origin: https://example.com`, there's no `access-control-allow-origin` line.
 - AC5: as the test user:
   - `GET /livesync-test` → 200
-  - `GET /_all_dbs` → 403
+  - `GET /_all_dbs` → 401 "You are not a server admin."
   - `GET /other-test` → 403
-  - `GET /_node/_local/_config` → 403
+  - `GET /_node/_local/_config` → 401 "You are not a server admin."
 
   The setup run twice gives 412 or 409 on the second pass, never 5xx.
 - AC6: the owner's ticked checklist is in the PR body, with no secrets.

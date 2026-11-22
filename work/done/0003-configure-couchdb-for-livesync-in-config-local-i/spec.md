@@ -59,14 +59,14 @@ from: intent.md
 
 ## Acceptance criteria
 - AC1 (R1): `config/20-livesync.ini` contains each of the nine keys. A read against `provision.ts` at the cited commit finds every value matching, and that comparison is pasted in the PR.
-- AC2 (R2): after `podman compose up -d`, `scripts/check-couchdb-config` exits 0 and prints `ok` for every key. Running it after setting one key to a different value via `PUT _node/_local/_config/couchdb/max_document_size` exits 1 and names `couchdb/max_document_size`. The temporary change is then reverted with a restart, and the check passes again.
+- AC2 (R2): after `podman compose up -d`, `scripts/check-couchdb-config` exits 0 and prints `ok` for every key. Running it after setting one key to a different value via `PUT _node/_local/_config/couchdb/max_document_size` exits 1 and names `couchdb/max_document_size`. The temporary change is then reverted by PUTting the ini's value back (a restart keeps it, because a config API write lands in `local.d/docker.ini`), and the check passes again.
 - AC3 (R3): `curl -s -o /dev/null -w '%{http_code}'` without credentials on `/`, `/_up`, `/_all_dbs` and `/livesync-test` → `401` each.
 - AC4 (R4): `curl -si -X OPTIONS -H 'Origin: app://obsidian.md' -H 'Access-Control-Request-Method: GET' http://127.0.0.1:5984/livesync-test` shows `Access-Control-Allow-Origin: app://obsidian.md` and `Access-Control-Allow-Credentials: true`. The same request with `Origin: https://example.com` shows no `Access-Control-Allow-Origin` header.
 - AC5 (R5): after the runbook's setup steps, run twice to show they're idempotent:
   - as the test user, `GET /livesync-test` → 200
-  - `GET /_all_dbs` → 403. CouchDB 3's `[chttpd] admin_only_all_dbs` default should give this. If it's 200, the build stops and reports rather than adding a setting LiveSync's list doesn't include.
+  - `GET /_all_dbs` → 401 or 403 (denied; CouchDB 3.5 answers 401 "You are not a server admin."). CouchDB 3's `[chttpd] admin_only_all_dbs` default should give this. If it's 200, the build stops and reports rather than adding a setting LiveSync's list doesn't include.
   - `PUT /other-test` (created by the admin) → 403
-  - `GET /_node/_local/_config` → 403
+  - `GET /_node/_local/_config` → 401 or 403 (denied; CouchDB 3.5 answers 401 "You are not a server admin.")
 - AC6 (R6): the PR body has the owner's ticked checklist:
   - the server check passed with no changes accepted
   - the initial sync completed
