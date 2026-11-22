@@ -56,7 +56,7 @@ from: spec.md
 
     So the runbook now does the check and the initialise as the admin, re-applies the `_security` members, then switches the client's login to `livesync-test`. Syncing as a member then worked: `_bulk_docs` and `_local` writes returned 201, with no 401 or 403. **Members is enough for sync, and the database-admins fallback wasn't needed.** Phase 2's `vault add` inherits this: create the database and the user as the admin, and initialise the first device as the admin too.
   - **Owner's result (2026-11-22, LiveSync plugin 1.0.52 on macOS):** the server check as the admin offered no changes, the initial sync completed, edits synced as `livesync-test`, and `scripts/check-couchdb-config` still passed afterwards.
-- [ ] 8. **README line, clean up and verify:**
+- [x] 8. **README line, clean up and verify:**
   - add the README line
   - `scripts/check-quadlets` exits 0 (compose untouched)
   - run AC7's grep
