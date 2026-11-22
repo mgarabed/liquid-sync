@@ -32,17 +32,18 @@ Evidence files (sample compose, podlet output) live in the session scratchpad, n
   - **Validation:** dry-run the output with Podman's quadlet generator inside a pinned `quay.io/podman/stable:<tag>` (e.g. `QUADLET_UNIT_DIRS=/q /usr/libexec/podman/quadlet -dryrun` with the output mounted at `/q`). Capture the exit status and the generated unit names.
   - If podlet rejects a feature the rules allow, tighten the rules and rerun. If the image or the dry-run path doesn't work at all, stop and report back; don't switch options (spec Design).
 
+  *Rootless check:* the owner reversed the rootful decision during build (see spec). The same podlet output also passes `quadlet -dryrun -user` (exit 0, three services).
   *As done:* the sample also bind-mounts a `./conf` directory with `:ro,Z` and sets `mem_limit:`, and its `env_file:` is named `couchdb-vars.txt` (the session's secrets guard blocks `*.env` names). `:Z` works on the Podman machine's macOS mounts. The negative checks behind the compose rules were also run: podlet exits 1 on `${VAR}` (even with the variable set), on `deploy:` and on `profiles:`, so memory limits use `mem_limit:`. A deliberately broken `.container` makes the quadlet dry-run exit 1, which shows the dry-run really validates.
 - [ ] 3. **Write the ADR**, about a page and a half:
   - `Status: accepted` and the date
   - **Context:** Pi 4, a shared homelab host, the Mac running Colima for other projects, and CLAUDE.md's compose rule
   - **Options:** A, B and C, each with its cost and what it gives up, linked to sources
-  - **Decision:** labelled bullets for all 9 R2 topics: production OS, Colima coexistence, rootful, the shared host and homelab split, source of truth, local runtime, how Podman is proven, compose rules, memory budget
+  - **Decision:** labelled bullets for all 9 R2 topics: production OS, Colima coexistence, rootless (spec revised during build), the shared host and homelab split, source of truth, local runtime, how Podman is proven, compose rules, memory budget
   - **Compose rules** checklist (`- [ ]` items): fully qualified image names; pinned multi-arch tags; `:Z` on bind mounts; `env_file:` and no `${VAR}`; no `include`, `build`, `deploy`, `profiles`, `extends` or `scale`; host ports on 127.0.0.1; memory limits summing to 1 GB or less
   - **Local development** rules (R10)
   - the **podlet** justification (R7): what it does, maintenance and licence (checked from its repo), container-only use, and the fall-back if it's abandoned (the committed quadlets stay valid and become hand-maintained, which is option C)
   - **Evidence** block (R8, R10), with commands, pinned tags and exit codes
-  - **Consequences:** rootful plus the sidecar's `NET_ADMIN`, the 0002 verify step, Spike A's memory check, and the Phase 2 CLI using `podman`
+  - **Consequences:** rootless under a dedicated service user (lingering enabled, quadlets in that user's unit path, `podman auto-update` as a user timer), the sidecar in userspace mode with no added capabilities, the 0002 verify step dry-running with `quadlet -dryrun -user`, Spike A's memory check, and the Phase 2 CLI using `podman`
 
   Every claim gets a primary-source link.
 - [ ] 4. **Edit `docs/project-plan.md`:**
@@ -72,10 +73,10 @@ Evidence files (sample compose, podlet output) live in the session scratchpad, n
 
 ## Proof
 - AC1: `grep -cE '^## (Context|Options|Decision|Consequences)$' docs/decisions/0001-container-runtime-and-deployment.md` → `4`, and `grep -E '^Status: accepted' …` matches.
-- AC2: one `grep -ciE '<label>'` per R2 topic, each ≥ 1. The labels: Production OS, Rootful, Shared host, Source of truth, Local runtime, Podman compatibility, Compose rules, Memory budget, Colima.
+- AC2: one `grep -ciE '<label>'` per R2 topic, each ≥ 1. The labels: Production OS, Rootless, Shared host, Source of truth, Local runtime, Podman compatibility, Compose rules, Memory budget, Colima.
 - AC3: the Options section has `A`, `B` and `C` entries, each with "Costs" and "Gives up" lines.
 - AC4: `grep -oE 'https?://[^) ]+' docs/decisions/0001-*.md | sort -u | xargs -n1 curl -sIL -o /dev/null -w '%{http_code} %{url}\n'` → no 4xx or 5xx.
-- AC5: `git diff main -- docs | grep -E '^\+' | grep -cE '([0-9]{1,3}\.){3}[0-9]{1,3}|\.ts\.net|mercuryrising'` → `0`. The ADR's `127.0.0.1` is loopback, and AC5's regex would flag it, so the ADR writes "loopback (127.0.0.1)" only inside the compose rule. The check excludes `127.0.0.1` explicitly: `grep -v '127\.0\.0\.1'` before the count.
+- AC5: `git diff main -- docs | grep -E '^\+' | grep -v '127\.0\.0\.1' | grep -cE '([0-9]{1,3}\.){3}[0-9]{1,3}|\.ts\.net|mercuryrising'` → `0` (spec AC5 amended during build to exclude loopback).
 - AC6: `awk '/^## Compose rules/,/^## [A-Z]/' <adr> | grep -c '^- \[ \]'` ≥ 7.
 - AC7: the ADR contains "podlet" in the Options and Decision sections, and an "Evidence" heading with both commands and `exit 0`.
 - AC8: `git diff main --stat -- docs/project-plan.md`, plus a read of the diff: only the D3, component 9, Phase 5 and open-questions hunks.
