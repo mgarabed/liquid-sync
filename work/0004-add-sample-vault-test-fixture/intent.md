@@ -2,15 +2,16 @@
 id: 0004
 title: Add sample vault test fixture
 type: chore
-status: planned
+status: building
 risk: low
 tier: small
 priority: P2
 author: Mike Garabedian
 created: 2026-11-21
-branch: 
+branch: work/0004-add-sample-vault-test-fixture
 pr: 
 depends: 
+started: 2026-11-22T18:36:00+00:00
 ---
 # Intent: Add sample vault test fixture
 
