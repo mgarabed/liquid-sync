@@ -13,11 +13,13 @@ from: spec.md
 Evidence files (sample compose, podlet output) live in the session scratchpad, not the repo. Their content is quoted in the ADR's Evidence block.
 
 ## Order of work
-- [ ] 1. **Install Podman, with the owner's approval.** Ask first, and propose `brew install podman`. Don't install Podman Desktop or `podman-mac-helper`. Before installing, record `docker context show` (expected: `colima`). Then:
+- [x] 1. **Install Podman, with the owner's approval.** Ask first, and propose `brew install podman`. Don't install Podman Desktop or `podman-mac-helper`. Before installing, record `docker context show` (expected: `colima`). Then:
   - `podman machine init --cpus 2 --memory 2048`, then `podman machine start`
   - confirm `podman info` works, and that `docker context show` still prints `colima` and `docker ps` still lists only Colima's containers
 
   If the owner declines, the evidence steps below use `docker` on Colima instead, and the ADR says so (spec Design).
+
+  *As done:* the owner installed Podman 6.1.4 with the official `.pkg` installer and Podman Desktop (podman.io recommends the installer over brew), not `brew install podman`. The installer set up `podman-mac-helper`, which linked `/var/run/docker.sock` to the Podman machine once it started. The owner removed it with `sudo /opt/podman/bin/podman-mac-helper uninstall`, which also removed the symlink. Podman Desktop's Docker compatibility setting is off. The machine (`podman-machine-default`, libkrun, rootful, 4 CPUs, ~2 GiB) was created from Podman Desktop. Afterwards: `docker context show` → `colima`, `docker ps` lists only Colima's containers, and `/var/run/docker.sock` doesn't exist.
 - [ ] 2. **Gather the evidence** in the scratchpad, using pinned image tags only:
   - Write a sample `compose.yaml` using only features the draft compose rules allow:
     - `docker.io/library/couchdb:3.5` on `127.0.0.1:15984:5984` (15984 is free; 5984 is avoided so nothing collides with a later real stack)
@@ -56,7 +58,7 @@ Evidence files (sample compose, podlet output) live in the session scratchpad, n
 ## Risks
 - **The riskiest step is 1**, the only change outside the repo. Podman could take over the Docker socket and break the owner's Colima projects.
   - Mitigations: use the CLI only (no Podman Desktop or `podman-mac-helper`), record `docker context show` before and after, and check `docker ps` still shows Colima's containers.
-  - Undo: `podman machine rm -f && brew uninstall podman`.
+  - Undo: `podman machine rm -f`, then remove the `.pkg` install (`/opt/podman`, plus its `/etc/paths.d/podman-pkg` entry if present) and Podman Desktop from `/Applications`. The `.pkg` installer adds `podman-mac-helper`, which must be uninstalled (`sudo /opt/podman/bin/podman-mac-helper uninstall`) or it takes over `/var/run/docker.sock`.
   - The standing rule to ask before installing software applies, and the step does ask.
 - **`podman compose` delegates to `/opt/homebrew/bin/docker-compose`.** If it doesn't point that binary at Podman's socket, the sample could land in Colima. Step 2 checks exactly this. If it happens, the ADR records the fix: set `PODMAN_COMPOSE_PROVIDER` or the `compose_providers` setting, or use `podman-compose`, and the coexistence rules get updated.
 - **Podlet's compose support is narrower than compose**, with no interpolation. The sample is deliberately written to the rules, so a podlet failure means the rules need tightening, not that the decision is wrong. If podlet can't convert even the minimal sample, that's a stop-and-report.
@@ -79,7 +81,7 @@ Evidence files (sample compose, podlet output) live in the session scratchpad, n
 - AC9: `sdlc verify` → `verify: PASS`.
 - **Rollback:**
   - Repo: `git revert -m 1 <merge sha>` removes the ADR and the plan edits. A wrong decision found later is superseded by ADR 0002+, not edited.
-  - Mac: `podman machine rm -f && brew uninstall podman` removes Podman, leaving Colima untouched.
+  - Mac: `podman machine rm -f`, then remove `/opt/podman` and Podman Desktop (see Risks). Colima is untouched.
 
 ## Parallel tracks
 <!-- None: a single document plus a small plan edit, done in order. -->
