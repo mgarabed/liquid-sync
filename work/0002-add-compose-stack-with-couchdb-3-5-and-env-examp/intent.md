@@ -2,17 +2,19 @@
 id: 0002
 title: Add compose stack with CouchDB 3.5 and .env.example
 type: feature
-status: building
+status: in-review
 risk: low
 tier: standard
 priority: P2
 author: Mike Garabedian
 created: 2026-11-21
 branch: work/0002-add-compose-stack-with-couchdb-3-5-and-env-examp
-pr: 
+pr: 3
 depends: 0006
 spec_hash: requirements=f30726b3b4a0;acceptance-criteria=ba4791da0cca;areas-of-concern=08320bfc51c1
 started: 2026-11-22T17:54:26+00:00
+submitted: 2026-11-22T18:11:21+00:00
+submitted_verify: full
 ---
 # Intent: Add compose stack with CouchDB 3.5 and .env.example
 
