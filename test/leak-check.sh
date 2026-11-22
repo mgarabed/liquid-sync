@@ -415,16 +415,26 @@ t_binary_and_nodiff_scanned() {
   printf '%s\n' '*.ini -diff' > .gitattributes
   printf '%s\n' "$pw_name=s3cr3t-value" > cfg.ini
   printf 'x\000\n%s\n' "$fake_key" > blob.dat
-  git add .gitattributes cfg.ini blob.dat
+  printf 'x\000 %s\n' "$fake_key" > same-line.dat
+  git add .gitattributes cfg.ini blob.dat same-line.dat
   run scripts/leak-check --staged
   expect_rc 1
   expect_has "cfg.ini:1: secret-assignment"
   expect_has "blob.dat:2: tailscale-key"
+  expect_has "same-line.dat:1: tailscale-key"
   expect_lacks "$fake_key"
   run scripts/leak-check --tree
   expect_rc 1
   expect_has "cfg.ini:1: secret-assignment"
   expect_has "blob.dat:2: tailscale-key"
+  expect_has "same-line.dat:1: tailscale-key"
+  # Push mode uses the same diff parser.
+  git init -q --bare "$tmp_root/binary-remote.git"
+  git remote add origin "$tmp_root/binary-remote.git"
+  git commit -q --no-verify -m "binary leaks"
+  run git push -q origin main
+  [ "$rc" -ne 0 ] || fail "push with a NUL-line leak succeeded" "$out"
+  expect_has "same-line.dat:1: tailscale-key"
 }
 
 # 0001 design: a malformed rules file fails with its own path and line.

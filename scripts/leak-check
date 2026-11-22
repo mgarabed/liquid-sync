@@ -239,7 +239,9 @@ build_tree_input() {
 # parse_diff <label>: read a unified diff (-U0, a/ b/ prefixes) on stdin and
 # append its added lines to the scan input, with their new-file line numbers.
 parse_diff() {
-  awk -v label="$1" -v idx="$work/index" -v out="$work/content" '
+  # NULs become \001 first: BSD awk truncates a line at a NUL byte, which would
+  # hide the rest of that line (git diff --text emits them raw).
+  tr '\000' '\001' | awk -v label="$1" -v idx="$work/index" -v out="$work/content" '
     /^diff --git / { header = 1; path = ""; next }
     /^@@ / {
       header = 0
