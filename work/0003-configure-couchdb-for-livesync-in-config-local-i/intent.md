@@ -2,7 +2,7 @@
 id: 0003
 title: Configure CouchDB for LiveSync in config/local.ini
 type: feature
-status: accepted
+status: planned
 risk: low
 tier: standard
 priority: P2
@@ -11,6 +11,7 @@ created: 2026-11-21
 branch: 
 pr: 
 depends: 0002, 0004
+spec_hash: requirements=d36f9efcec51;acceptance-criteria=2dfffc02ebb6;areas-of-concern=2be907f42787
 ---
 # Intent: Configure CouchDB for LiveSync in config/local.ini
 
