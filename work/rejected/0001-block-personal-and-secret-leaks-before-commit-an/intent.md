@@ -2,7 +2,7 @@
 id: 0001
 title: Block personal and secret leaks before commit and push
 type: chore
-status: building
+status: rejected
 risk: low
 tier: high
 priority: P1
@@ -12,6 +12,7 @@ branch: work/0001-block-personal-and-secret-leaks-before-commit-an
 pr: 
 spec_hash: requirements=346e44be5c8b;acceptance-criteria=04e486f56e75;areas-of-concern=eb22907693e1
 started: 2026-11-21T16:56:41+00:00
+rejected_reason: parked: trying gitleaks in GitHub CI instead; revisit later from branch work/rejected/0001-block-personal-and-secret-leaks-before-commit-an
 ---
 # Intent: Block personal and secret leaks before commit and push
 
