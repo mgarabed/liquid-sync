@@ -45,7 +45,7 @@ from: intent.md
       - `mem_limit: 512m`
       - `restart: unless-stopped`, if podlet maps it. Otherwise it's left out, and quadlet's default applies.
     - top level: `networks: liquid-sync:` and `volumes: couchdb-data:`
-  - `couchdb.env.example` (new): `COUCHDB_USER=admin` and `COUCHDB_PASSWORD=change-me`, with a comment that the entrypoint refuses to start without both ([entrypoint](https://github.com/apache/couchdb-docker/blob/main/3.5.3/docker-entrypoint.sh)).
+  - `couchdb.env.example` (new): `COUCHDB_USER=admin` and an empty `COUCHDB_PASSWORD=` (changed from `change-me` after review, so an unedited copy fails closed), with a comment that the entrypoint refuses to start without both ([entrypoint](https://github.com/apache/couchdb-docker/blob/main/3.5.3/docker-entrypoint.sh)).
   - `config/10-single-node.ini` (new): `[couchdb]` and `single_node = true`.
   - `deploy/quadlets/*.container`, `*.network` (new, generated): podlet output, with only podlet's own header.
   - `scripts/check-quadlets` (new, bash, `set -euo pipefail`)
@@ -55,6 +55,7 @@ from: intent.md
     - runs `quay.io/podman/stable:v6.1.3@sha256:1d28…` with `quadlet -dryrun -user` on the committed files
     - `--write` regenerates `deploy/quadlets/` in place, for use after editing `compose.yaml`
     - exits non-zero on any failure, with a one-line reason
+    - checks each `rm -rf` target first: the temp dir must be `check-quadlets.??????` under `/tmp`, and `deploy/quadlets/` must sit beside `compose.yaml` and hold only quadlet unit files
     - full digests are copied from ADR 0001's Evidence
   - `.gitignore` (edit): `*.env` and `!*.env.example` added to the Secrets block.
   - `README.md` (edit): a short "Run locally" section (`cp couchdb.env.example couchdb.env`, edit, `podman compose up -d`, `curl -u … http://127.0.0.1:5984/_up`), and the layout block's `deploy/pi/` line.

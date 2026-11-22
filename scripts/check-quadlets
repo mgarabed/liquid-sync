@@ -40,11 +40,44 @@ PODMAN="${PODMAN:-podman}"
 command -v "$PODMAN" >/dev/null 2>&1 \
   || die "podman not found ('$PODMAN'); set PODMAN=/opt/podman/bin/podman or add it to PATH"
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 committed="$root/deploy/quadlets"
 
-tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
+# Both rm -rf calls below check their target first, so an empty or wrong
+# variable can't point them anywhere else.
+
+# The temp dir always lives under /tmp. Its resolved path is used, because on
+# macOS /tmp links to /private/tmp and the Podman machine shares /private.
+tmp_root="$(cd /tmp && pwd -P)"
+tmp="$(mktemp -d "$tmp_root/check-quadlets.XXXXXX")"
+tmp="$(cd "$tmp" && pwd -P)"
+
+assert_tmp() {
+  case "$tmp" in
+    "$tmp_root"/check-quadlets.??????)
+      [ -d "$tmp" ] && [ ! -L "$tmp" ] && return 0 ;;
+  esac
+  die "refusing to remove '$tmp': not a check-quadlets temp dir under $tmp_root"
+}
+
+# deploy/quadlets/ is removed only when it is this repo's quadlet directory (next
+# to compose.yaml and this script) and holds nothing but quadlet unit files.
+assert_committed() {
+  [[ "$root" == /?* ]] && [ "$committed" = "$root/deploy/quadlets" ] \
+    && [ -f "$root/compose.yaml" ] && [ -f "$root/scripts/check-quadlets" ] \
+    || die "refusing to remove '$committed': not <repo>/deploy/quadlets"
+  [ ! -L "$committed" ] || die "refusing to remove '$committed': it is a symlink"
+  [ -d "$committed" ] || return 0
+  local stray
+  stray="$(find "$committed" -mindepth 1 \( ! -type f -o ! \( -name '*.container' \
+    -o -name '*.network' -o -name '*.volume' -o -name '*.pod' \) \) -print -quit)"
+  [ -z "$stray" ] \
+    || die "refusing to remove '$committed': it holds '${stray#"$committed/"}', which isn't a quadlet unit file"
+}
+
+assert_tmp
+cleanup() { assert_tmp && rm -rf "$tmp"; }
+trap cleanup EXIT
 
 # Stage only what podlet needs. The env file is the committed example under the
 # real name, so the check never reads a real secret.
@@ -64,6 +97,7 @@ fi
 failed=()
 
 if [ "$write" -eq 1 ]; then
+  assert_committed
   rm -rf "$committed"
   mkdir -p "$committed"
   cp "$tmp/src/out/"* "$committed/"

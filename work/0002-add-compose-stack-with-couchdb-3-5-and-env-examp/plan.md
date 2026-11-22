@@ -38,7 +38,7 @@ from: spec.md
   - Finish with `$PODMAN compose down -v`
 - [x] 4. **Generate and commit the quadlets:**
   - First try podlet with `restart: unless-stopped` in the compose file. If podlet rejects it, drop it from `compose.yaml` and note it here.
-  - Generate into `deploy/quadlets/` with the ADR's digest-pinned podlet command (without `--pod`).
+  - Generate into `deploy/quadlets/` with the ADR's digest-pinned podlet command (without `--pod`), plus `--install` (added after review round 1; ADR 0001's example command lacks it, and without it the units don't start at boot).
   - Read the output:
     - `ContainerName=liquid-sync-couchdb`
     - `AutoUpdate=registry`
@@ -81,10 +81,12 @@ from: spec.md
   - adding the verify step here (0008, high tier)
   - a single `.env` (decided per-service)
 - **Recorded during the build:**
-  - Order: steps 4, 5 and 7 ran before steps 3 and 6, because the secrets guard hook blocks Claude from creating `couchdb.env`, so the owner creates it. The quadlets were generated with `scripts/check-quadlets --write` (the ADR's podlet command, staged in a temp dir), not a separate podlet call.
+  - Order: steps 4, 5 and 7 ran before steps 3 and 6, because the secrets guard hook blocks Claude from creating `couchdb.env`, so the owner creates it. The quadlets were generated with `scripts/check-quadlets --write` (the ADR's podlet command plus `--install`, staged in a temp dir), not a separate podlet call.
   - Podlet does **not** need `couchdb.env` to exist: a run on `compose.yaml` and `config/` alone wrote both files, exit 0. The script still stages the example as `couchdb.env` so that holds if podlet changes.
   - Podlet maps `restart: unless-stopped` to `[Service] Restart=always`, and `mem_limit: 512m` to `Memory=512mb`. It writes no header. The generated names are `couchdb.container` and `liquid-sync.network`, as planned.
   - Review round 1 (bugs, Important): podlet's default output has no `[Install]` section, so quadlet would never enable the units and nothing would start at boot. `scripts/check-quadlets` now passes podlet `--install` (`WantedBy=default.target` on both units).
+  - After review (owner request): both `rm -rf` calls in `scripts/check-quadlets` check their target first. The temp dir is made under a fixed `/tmp` root (resolved, because macOS links `/tmp` to `/private/tmp`) and must match `check-quadlets.??????` there. `--write` removes `deploy/quadlets/` only when it is `<repo>/deploy/quadlets` (with `compose.yaml` and the script beside it), isn't a symlink, and holds only `*.container|*.network|*.volume|*.pod` files. Tested: a stray file, a subdirectory, a symlink, a mis-set `committed`, and a decoy or empty `tmp` each refuse and leave the target in place.
+  - After review (nit): `couchdb.env.example` leaves `COUCHDB_PASSWORD` empty, so an unedited copy fails closed (the entrypoint exits 1 with its "Admin Party" error) instead of running as admin/change-me. A local run now needs the owner to set a password in `couchdb.env`.
   - `podman compose config -q` fails until `couchdb.env` exists, because compose resolves `env_file:` at config time.
 - **Overlaps:** `sdlc dep 0002 --check` found none. 0003 builds on `config/` after this item merges.
 

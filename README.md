@@ -39,7 +39,7 @@ development uses [Podman machine](https://docs.podman.io/en/stable/markdown/podm
 If `podman` isn't on your PATH, it's at `/opt/podman/bin/podman`.
 
 ```sh
-cp couchdb.env.example couchdb.env   # then set a real COUCHDB_PASSWORD
+cp couchdb.env.example couchdb.env   # then set COUCHDB_PASSWORD; CouchDB won't start without it
 podman compose up -d
 curl -u admin:<password> http://127.0.0.1:5984/_up
 podman compose down                  # add -v to delete the data volume too
@@ -70,7 +70,7 @@ All operations go through one bootstrap script (not yet implemented):
 ```
 liquid-sync              # bootstrap/CLI script (bash)
 compose.yaml             # CouchDB + archiver (+ tailscale sidecar), docker or podman
-config/                  # CouchDB local.ini, LiveSync settings presets
+config/                  # CouchDB *.ini (copied into local.d/), LiveSync presets
 archiver/                # CouchDB → files → git service
 deploy/quadlets/         # quadlet units generated from compose.yaml (Fedora IoT)
 docs/                    # plan, runbooks, decision records

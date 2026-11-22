@@ -34,7 +34,7 @@ every device, unlimited history, multiple vaults, and almost no upkeep.
 
 | # | Component | Purpose | Notes |
 |---|-----------|---------|-------|
-| 1 | **CouchDB** | Sync backend, one database per vault | `couchdb:3.5`, with the settings LiveSync needs (CORS, `max_document_size`, `max_http_request_size`, `require_valid_user`). Config in `config/local.ini`. |
+| 1 | **CouchDB** | Sync backend, one database per vault | `couchdb:3.5`, with the settings LiveSync needs (CORS, `max_document_size`, `max_http_request_size`, `require_valid_user`). Config in `config/*.ini`, copied into CouchDB's `local.d/` at start. |
 | 2 | **Tailscale access** | Stable private hostname plus HTTPS | `tailscale serve` → CouchDB. Use a dedicated node name (e.g. `liquid-sync`) through a Tailscale sidecar container, so the hostname moves with the stack instead of being tied to the laptop or the Pi. This is what makes host migration transparent. |
 | 3 | **Bootstrap CLI** (`./liquid-sync`) | Single entry point for setup and operations | Bash. Subcommands: `init`, `vault add/list/remove`, `setup-uri`, `migrate in/out`, `backup`, `restore`, `doctor`. Idempotent. |
 | 4 | **Archiver** | CouchDB → Markdown files → git commits | Follows each vault database's `_changes` feed, rebuilds files (LiveSync stores notes as chunks, encrypted when E2EE is on), and commits on a debounce (e.g. 10 minutes of quiet or hourly). Pushes to a private remote. **Approach is undecided, see Spike A.** |
@@ -153,7 +153,7 @@ videos), and per-device names for conflict attribution.
 - README, CLAUDE.md, project plan, .gitignore
 
 ### Phase 1 — Local stack, manual flow
-- `compose.yaml` with CouchDB 3.5 + `config/local.ini`
+- `compose.yaml` with CouchDB 3.5 + `config/*.ini`
 - Per-service env files with committed examples: `couchdb.env.example` (admin
   user/password), and later the vault list and the Tailscale auth key in their
   own services' files
@@ -196,9 +196,9 @@ videos), and per-device names for conflict attribution.
 
 ## 8. First steps (next session)
 
-1. Write `.env.example` and `compose.yaml` (CouchDB 3.5 only) and bring it up
+1. Write `couchdb.env.example` and `compose.yaml` (CouchDB 3.5 only) and bring it up
    locally on port 5984 bound to localhost.
-2. Add `config/local.ini` with the LiveSync-required CouchDB settings and check
+2. Add a `config/*.ini` file with the LiveSync-required CouchDB settings and check
    them against the plugin's current docs.
 3. Create `test/fixtures/sample-vault/` with a few notes, an image and nested
    folders.
