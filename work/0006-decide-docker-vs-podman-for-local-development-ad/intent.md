@@ -2,9 +2,9 @@
 id: 0006
 title: Choose the container runtime and deployment model (ADR 0001)
 type: chore
-status: draft
+status: accepted
 risk: low
-tier: 
+tier: standard
 priority: P2
 author: Mike Garabedian
 created: 2026-11-21
