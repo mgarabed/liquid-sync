@@ -50,7 +50,7 @@ from: intent.md
   - `deploy/quadlets/*.container`, `*.network` (new, generated): podlet output, with only podlet's own header.
   - `scripts/check-quadlets` (new, bash, `set -euo pipefail`)
     - copies `compose.yaml`, `config/` and `couchdb.env.example` (as `couchdb.env`) into a temp dir
-    - runs `ghcr.io/containers/podlet:v0.3.2@sha256:90cb…` with `--file out compose compose.yaml`
+    - runs `ghcr.io/containers/podlet:v0.3.2@sha256:90cb…` with `--file out --install compose compose.yaml` (`--install` adds `[Install] WantedBy=default.target`, so the units start at boot)
     - diffs `out/` against `deploy/quadlets/`, so an added, missing or changed file fails it
     - runs `quay.io/podman/stable:v6.1.3@sha256:1d28…` with `quadlet -dryrun -user` on the committed files
     - `--write` regenerates `deploy/quadlets/` in place, for use after editing `compose.yaml`

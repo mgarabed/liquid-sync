@@ -12,3 +12,6 @@ Volume=./config:/liquid-sync/config:ro,Z
 
 [Service]
 Restart=always
+
+[Install]
+WantedBy=default.target

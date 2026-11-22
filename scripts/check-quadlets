@@ -53,8 +53,10 @@ cp "$root/compose.yaml" "$tmp/src/"
 cp -R "$root/config" "$tmp/src/"
 cp "$root/couchdb.env.example" "$tmp/src/couchdb.env"
 
+# --install adds [Install] WantedBy=default.target. Without it quadlet never
+# enables the units, so they don't start at boot under the lingering user.
 if ! "$PODMAN" run --rm -v "$tmp/src:/w:Z" -w /w "$PODLET_IMAGE" \
-    --file out compose compose.yaml >"$tmp/podlet.log" 2>&1; then
+    --file out --install compose compose.yaml >"$tmp/podlet.log" 2>&1; then
   cat "$tmp/podlet.log" >&2
   die "podlet failed to convert compose.yaml"
 fi

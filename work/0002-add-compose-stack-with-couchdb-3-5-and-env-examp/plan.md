@@ -84,6 +84,7 @@ from: spec.md
   - Order: steps 4, 5 and 7 ran before steps 3 and 6, because the secrets guard hook blocks Claude from creating `couchdb.env`, so the owner creates it. The quadlets were generated with `scripts/check-quadlets --write` (the ADR's podlet command, staged in a temp dir), not a separate podlet call.
   - Podlet does **not** need `couchdb.env` to exist: a run on `compose.yaml` and `config/` alone wrote both files, exit 0. The script still stages the example as `couchdb.env` so that holds if podlet changes.
   - Podlet maps `restart: unless-stopped` to `[Service] Restart=always`, and `mem_limit: 512m` to `Memory=512mb`. It writes no header. The generated names are `couchdb.container` and `liquid-sync.network`, as planned.
+  - Review round 1 (bugs, Important): podlet's default output has no `[Install]` section, so quadlet would never enable the units and nothing would start at boot. `scripts/check-quadlets` now passes podlet `--install` (`WantedBy=default.target` on both units).
   - `podman compose config -q` fails until `couchdb.env` exists, because compose resolves `env_file:` at config time.
 - **Overlaps:** `sdlc dep 0002 --check` found none. 0003 builds on `config/` after this item merges.
 
