@@ -10,7 +10,7 @@ author: Mike Garabedian
 created: 2026-11-21
 branch: 
 pr: 
-depends: 0001
+depends: 
 ---
 # Intent: Decide Docker vs Podman for local development (ADR 0001)
 
