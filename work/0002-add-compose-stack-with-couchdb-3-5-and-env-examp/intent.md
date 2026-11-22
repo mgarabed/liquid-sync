@@ -2,7 +2,7 @@
 id: 0002
 title: Add compose stack with CouchDB 3.5 and .env.example
 type: feature
-status: accepted
+status: planned
 risk: low
 tier: standard
 priority: P2
@@ -11,6 +11,7 @@ created: 2026-11-21
 branch: 
 pr: 
 depends: 0006
+spec_hash: requirements=f30726b3b4a0;acceptance-criteria=ba4791da0cca;areas-of-concern=6af56e9826b1
 ---
 # Intent: Add compose stack with CouchDB 3.5 and .env.example
 
