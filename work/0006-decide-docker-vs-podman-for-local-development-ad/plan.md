@@ -53,7 +53,7 @@ Evidence files (sample compose, podlet output) live in the session scratchpad, n
   - open questions: answer "same Pi…" with "shared with other homelab services; host and other services live in a separate private repo (ADR 0001)"
 
   Nothing else in the plan changes.
-- [ ] 5. **Check and verify:**
+- [x] 5. **Check and verify:**
   - the AC4 URL check, the AC5 leak grep and the AC1/AC2/AC6 greps
   - `docker context show` → `colima` (AC10)
   - `sdlc verify`
