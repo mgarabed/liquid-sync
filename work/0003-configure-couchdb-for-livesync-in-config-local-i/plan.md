@@ -13,7 +13,7 @@ from: spec.md
 - `README.md` (edit): one line in "Run locally" pointing at the runbook and at `scripts/check-couchdb-config`.
 
 ## Order of work
-- [ ] 1. **Preflight, read-only.** Check that:
+- [x] 1. **Preflight, read-only.** Check that:
   - `PODMAN` resolves (falling back to `/opt/podman/bin/podman`)
   - the machine is rootless and running
   - `docker context show` prints `colima`
@@ -21,8 +21,8 @@ from: spec.md
   - `scripts/fixture-vault` exists on main (0004 merged)
 
   If any check fails, stop and report.
-- [ ] 2. **Pin the upstream source.** Fetch `utils/couchdb/provision.ts` from `vrtmrz/obsidian-livesync` at the current `main` commit, and record its hash. List the keys and values it PUTs. If the list differs from spec R1 (keys added or removed), stop and report rather than guess.
-- [ ] 3. **Write `config/20-livesync.ini`** from that list. Values are written as CouchDB ini values, so the JSON string `"true"` becomes `true`. `cors/origins` is `app://obsidian.md,capacitor://localhost,http://localhost`. The header cites the commit URL.
+- [x] 2. **Pin the upstream source.** Fetch `utils/couchdb/provision.ts` from `vrtmrz/obsidian-livesync` at the current `main` commit, and record its hash. List the keys and values it PUTs. If the list differs from spec R1 (keys added or removed), stop and report rather than guess.
+- [x] 3. **Write `config/20-livesync.ini`** from that list. Values are written as CouchDB ini values, so the JSON string `"true"` becomes `true`. `cors/origins` is `app://obsidian.md,capacitor://localhost,http://localhost`. The header cites the commit URL.
 - [ ] 4. **Write `scripts/check-couchdb-config`:**
   - bash, `set -euo pipefail`, `--help`
   - reads `COUCHDB_USER` and `COUCHDB_PASSWORD` from the environment, or else parses only those two keys out of `couchdb.env`, without sourcing it
