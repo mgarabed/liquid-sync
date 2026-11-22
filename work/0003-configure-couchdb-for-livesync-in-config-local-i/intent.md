@@ -2,17 +2,19 @@
 id: 0003
 title: Configure CouchDB for LiveSync in config/local.ini
 type: feature
-status: building
+status: in-review
 risk: low
 tier: standard
 priority: P2
 author: Mike Garabedian
 created: 2026-11-21
 branch: work/0003-configure-couchdb-for-livesync-in-config-local-i
-pr: 
+pr: 5
 depends: 0002, 0004
 spec_hash: requirements=d36f9efcec51;acceptance-criteria=2dfffc02ebb6;areas-of-concern=2be907f42787
 started: 2026-11-22T18:51:10+00:00
+submitted: 2026-11-22T21:41:13+00:00
+submitted_verify: full
 ---
 # Intent: Configure CouchDB for LiveSync in config/local.ini
 
