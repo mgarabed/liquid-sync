@@ -34,7 +34,7 @@ Evidence files (sample compose, podlet output) live in the session scratchpad, n
 
   *Rootless check:* the owner reversed the rootful decision during build (see spec). The same podlet output also passes `quadlet -dryrun -user` (exit 0, three services).
   *As done:* the sample also bind-mounts a `./conf` directory with `:ro,Z` and sets `mem_limit:`, and its `env_file:` is named `couchdb-vars.txt` (the session's secrets guard blocks `*.env` names). `:Z` works on the Podman machine's macOS mounts. The negative checks behind the compose rules were also run: podlet exits 1 on `${VAR}` (even with the variable set), on `deploy:` and on `profiles:`, so memory limits use `mem_limit:`. A deliberately broken `.container` makes the quadlet dry-run exit 1, which shows the dry-run really validates.
-- [ ] 3. **Write the ADR**, about a page and a half:
+- [x] 3. **Write the ADR**, about a page and a half:
   - `Status: accepted` and the date
   - **Context:** Pi 4, a shared homelab host, the Mac running Colima for other projects, and CLAUDE.md's compose rule
   - **Options:** A, B and C, each with its cost and what it gives up, linked to sources
@@ -77,7 +77,7 @@ Evidence files (sample compose, podlet output) live in the session scratchpad, n
 - AC3: the Options section has `A`, `B` and `C` entries, each with "Costs" and "Gives up" lines.
 - AC4: `grep -oE 'https?://[^) ]+' docs/decisions/0001-*.md | sort -u | xargs -n1 curl -sIL -o /dev/null -w '%{http_code} %{url}\n'` → no 4xx or 5xx.
 - AC5: `git diff main -- docs | grep -E '^\+' | grep -v '127\.0\.0\.1' | grep -cE '([0-9]{1,3}\.){3}[0-9]{1,3}|\.ts\.net|mercuryrising'` → `0` (spec AC5 amended during build to exclude loopback).
-- AC6: `awk '/^## Compose rules/,/^## [A-Z]/' <adr> | grep -c '^- \[ \]'` ≥ 7.
+- AC6: `awk '/^### Compose rules/{f=1;next} /^#/{f=0} f' <adr> | grep -c '^- \[ \]'` ≥ 7. (Compose rules, Local development, Why podlet and Evidence are `###` subsections of Decision. The original range form ended on its own start line.)
 - AC7: the ADR contains "podlet" in the Options and Decision sections, and an "Evidence" heading with both commands and `exit 0`.
 - AC8: `git diff main --stat -- docs/project-plan.md`, plus a read of the diff: only the D3, component 9, Phase 5 and open-questions hunks.
 - AC10: `docker context show` → `colima`, and the Evidence block shows the sample in `podman ps` and not in `docker ps`.
