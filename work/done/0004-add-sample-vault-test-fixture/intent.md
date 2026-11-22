@@ -2,7 +2,7 @@
 id: 0004
 title: Add sample vault test fixture
 type: chore
-status: in-review
+status: merged
 risk: low
 tier: small
 priority: P2
@@ -14,6 +14,8 @@ depends:
 started: 2026-11-22T18:36:00+00:00
 submitted: 2026-11-22T18:40:00+00:00
 submitted_verify: full
+merged: 2026-11-22T18:46:02+00:00
+checks: none
 ---
 # Intent: Add sample vault test fixture
 
