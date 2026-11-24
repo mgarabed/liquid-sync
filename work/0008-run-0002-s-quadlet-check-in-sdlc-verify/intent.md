@@ -2,7 +2,7 @@
 id: 0008
 title: Run 0002's quadlet check in sdlc verify
 type: chore
-status: specced
+status: planned
 risk: low
 tier: high
 priority: P2
