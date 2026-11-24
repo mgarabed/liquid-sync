@@ -2,7 +2,7 @@
 id: 0008
 title: Run 0002's quadlet check in sdlc verify
 type: chore
-status: accepted
+status: specced
 risk: low
 tier: high
 priority: P2
@@ -12,6 +12,7 @@ branch:
 pr: 
 source: 0002
 depends: 0002
+spec_hash: requirements=5873c25c014b;acceptance-criteria=0f44e35ea68d;areas-of-concern=66e4840f69d9
 ---
 # Intent: Run 0002's quadlet check in sdlc verify
 
