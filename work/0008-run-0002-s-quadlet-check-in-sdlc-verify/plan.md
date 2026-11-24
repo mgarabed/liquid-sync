@@ -13,7 +13,7 @@ from: spec.md
 - `work/0008-run-0002-s-quadlet-check-in-sdlc-verify/plan.md` (edit) — tick steps and record the proof results.
 
 ## Order of work
-- [ ] 1. **Script: the availability check and the flag.** In `scripts/check-quadlets`:
+- [x] 1. **Script: the availability check and the flag.** In `scripts/check-quadlets`:
   - Parse `--skip-if-no-podman` in the existing `for arg` loop, setting `skip_if_no_podman=1`. Document it in `usage()`: "exit 0 with a SKIPPED warning when Podman isn't installed or can't reach an engine; every other failure still fails".
   - Replace the `command -v "$PODMAN" … || die …` line with a function, `podman_unavailable_reason`. It prints a reason and returns 0 when Podman is unavailable, and returns 1 otherwise:
     - binary: `command -v "$PODMAN" >/dev/null 2>&1`, or the reason is `podman not found ('$PODMAN'); set PODMAN or add it to PATH`
@@ -40,7 +40,7 @@ from: spec.md
 - AC1 (0008 R1): from Claude's shell (`command -v podman` is empty), run `sdlc verify`. Expect `── quadlets: PODMAN=…`, then `check-quadlets: OK`, then `verify: PASS (shellcheck, quadlets)`. Run `sdlc verify --fast` and expect `verify: PASS [fast] (shellcheck, quadlets)`. Then `PATH="/opt/podman/bin:$PATH" sdlc verify --fast`, which also shows `check-quadlets: OK`.
 - AC2 (0008 R2, R4): `d=$(mktemp -d "$TMPDIR/q.XXXXXX") && git archive HEAD | tar -x -C "$d"`.
   - Run `sed -i '' 's/mem_limit: 512m/mem_limit: 256m/' "$d/compose.yaml"`, then `PODMAN=/opt/podman/bin/podman "$d/scripts/check-quadlets" --skip-if-no-podman`. Expect a non-zero exit, a diff naming `couchdb.container`, and the `--write` hint.
-  - Restore the line, run `printf 'Bogus=1\n' >> "$d/deploy/quadlets/couchdb.container"`, and rerun. Expect a non-zero exit and `quadlet -dryrun -user rejected`.
+  - Restore the line, run `sed -i '' 's/^\[Container\]$/[Container]\nBogusKey=1/' "$d/deploy/quadlets/couchdb.container"`, and rerun. Expect a non-zero exit and `quadlet -dryrun -user rejected`. (The key goes in `[Container]`: an unknown key appended at the end lands in `[Install]`, which quadlet doesn't validate, so only the diff would fail.)
   - Afterwards, `podman` cleanup isn't needed (the containers use `--rm`), and the scratch dir is left for the OS to clear.
 - AC3 (0008 R3): `PODMAN=/nonexistent/podman scripts/check-quadlets --skip-if-no-podman; echo rc=$?` gives `SKIPPED — podman not found` and `rc=0`. `CONTAINER_HOST=unix:///nonexistent.sock PODMAN=/opt/podman/bin/podman scripts/check-quadlets --skip-if-no-podman; echo rc=$?` gives `SKIPPED — … can't reach an engine` and `rc=0`.
 - AC4 (0008 R5): the same two commands without the flag give `rc=1` with the matching reason.
