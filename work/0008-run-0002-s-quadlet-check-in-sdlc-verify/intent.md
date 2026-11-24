@@ -2,9 +2,9 @@
 id: 0008
 title: Run 0002's quadlet check in sdlc verify
 type: chore
-status: draft
+status: accepted
 risk: low
-tier: 
+tier: high
 priority: P2
 author: Mike Garabedian
 created: 2026-11-22
