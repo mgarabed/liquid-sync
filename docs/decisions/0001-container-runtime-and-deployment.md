@@ -87,6 +87,10 @@ Where the container definitions are kept (the source of truth):
   `quadlet -dryrun -user`, all in containers pinned by digest (the commands
   are in Evidence). The tooling digests are fixed; only runtime images
   float within their pinned tag, for `podman auto-update`. A real run on the Pi happens in the Phase 5 deployment item.
+  Amended 2026-11-24 (0008): the step is added by 0008, not 0002. It runs
+  `scripts/check-quadlets --skip-if-no-podman`, which exits 0 with a SKIPPED
+  warning only when no podman binary is found or it can't reach an engine;
+  any other failure fails verify.
 - **Compose rules:** the checklist below. 0002 applies it line by line, and
   so does every later change to `compose.yaml`.
 - **Memory budget:** 1 GB for all liquid-sync containers together, set per
@@ -314,8 +318,9 @@ file using `${TAG}` (even with `TAG` set), `include`, `extends`, `build`,
   Tailscale's docs don't say whether `tailscale serve` works in userspace mode,
   so 0002 must prove it. If it doesn't, kernel mode needs `/dev/net/tun` and
   added capabilities under rootless Podman, and this ADR is revisited.
-- 0002 writes `compose.yaml` to the compose rules and adds the verify step
-  (regenerate, diff, `quadlet -dryrun -user`).
+- 0002 writes `compose.yaml` to the compose rules and the check script
+  (regenerate, diff, `quadlet -dryrun -user`); 0008 adds the verify step that
+  runs it, skipping with a warning when Podman is unavailable.
 - Spike A (0007) must fit the archiver in the 1 GB budget or reopen this ADR.
 - The Phase 2 CLI uses `podman` commands for local development.
 - A wrong decision here is superseded by a new ADR, not edited.
