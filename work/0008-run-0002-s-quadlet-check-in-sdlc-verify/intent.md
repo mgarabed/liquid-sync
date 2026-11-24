@@ -2,17 +2,18 @@
 id: 0008
 title: Run 0002's quadlet check in sdlc verify
 type: chore
-status: planned
+status: building
 risk: low
 tier: high
 priority: P2
 author: Mike Garabedian
 created: 2026-11-22
-branch: 
+branch: work/0008-run-0002-s-quadlet-check-in-sdlc-verify
 pr: 
 source: 0002
 depends: 0002
 spec_hash: requirements=5873c25c014b;acceptance-criteria=0f44e35ea68d;areas-of-concern=66e4840f69d9
+started: 2026-11-24T23:07:05+00:00
 ---
 # Intent: Run 0002's quadlet check in sdlc verify
 
