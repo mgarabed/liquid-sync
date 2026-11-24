@@ -45,7 +45,7 @@ from: spec.md
 - AC3 (0008 R3): `PODMAN=/nonexistent/podman scripts/check-quadlets --skip-if-no-podman; echo rc=$?` gives `SKIPPED — podman not found` and `rc=0`. `CONTAINER_HOST=unix:///nonexistent.sock PODMAN=/opt/podman/bin/podman scripts/check-quadlets --skip-if-no-podman; echo rc=$?` gives `SKIPPED — … can't reach an engine` and `rc=0`.
 - AC4 (0008 R5): the same two commands without the flag give `rc=1` with the matching reason.
 - AC5 (0008 R6): `scripts/check-quadlets --help | grep -- --skip-if-no-podman`. `shellcheck -x scripts/check-quadlets` exits 0. `grep -n 'couchdb.env' scripts/check-quadlets` matches only the `couchdb.env.example` staging line (and comments).
-- AC6 (0008 R7): `grep -n '0008' docs/decisions/0001-container-runtime-and-deployment.md` shows the amendment and the Consequences bullet. `grep -n '0002 adds\|adds the verify step' …` finds only the original "Podman compatibility" sentence on line 84, which stays as the ADR's record and is corrected by the amendment beneath it.
+- AC6 (0008 R7): `grep -n '0008' docs/decisions/0001-container-runtime-and-deployment.md` shows the amendment and the Consequences bullet. `grep -n '0002 adds' …` finds only the original "Podman compatibility" sentence on line 84, which stays as the ADR's record and is corrected by the amendment beneath it.
 - AC7: a full `sdlc verify` ends with `verify: PASS`. Paste the summary line here.
 - **Rollback:** `git revert` the merge commit on main. The `quadlets` step leaves verify, the ADR text returns to before, and the script goes back to its old behaviour. Nothing outside the repo changes (no hosts, data or images), so there's nothing else to undo.
 
