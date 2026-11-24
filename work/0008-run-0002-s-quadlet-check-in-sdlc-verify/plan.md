@@ -22,7 +22,7 @@ from: spec.md
   - Keep this before `root=`, `mktemp` and the trap, so a skip creates nothing. Nothing after it changes.
   - Run `shellcheck -x scripts/check-quadlets`, then AC3, AC4 and AC5 (see Proof), and the AC2 scratch-copy checks. Commit: `0008: skip check-quadlets cleanly when Podman is unavailable`.
 - [x] 2. **ADR 0001 amendment.** Under the "Podman compatibility" bullet, add an indented line: `Amended 2026-11-24 (0008): the step is added by 0008, not 0002. It runs scripts/check-quadlets --skip-if-no-podman, which exits 0 with a SKIPPED warning only when no podman binary is found or it can't reach an engine; any other failure fails verify.` In Consequences, change "0002 writes `compose.yaml` to the compose rules and adds the verify step (…)" to say that 0002 writes `compose.yaml` and the check script, and 0008 adds the verify step. Change no other text. Run AC6. Commit: `0008: amend ADR 0001 for the verify step's Podman skip`.
-- [ ] 3. **Verify step (control-plane edit; the owner approves).** In `.sdlc/config.toml` `[verify] steps`, add after the shellcheck entry:
+- [x] 3. **Verify step (control-plane edit; the owner approves).** In `.sdlc/config.toml` `[verify] steps`, add after the shellcheck entry:
   `{ name = "quadlets", run = "PODMAN=\"${PODMAN:-$(command -v podman || echo /opt/podman/bin/podman)}\" scripts/check-quadlets --skip-if-no-podman" },`
   Don't add a `fast` key, so `--fast` runs the same command. Run AC1 from Claude's shell (no podman on PATH), then the PATH-podman case. Commit: `0008: run the quadlet check in sdlc verify`.
 - [ ] 4. **Record the proof.** Paste the AC results and the `sdlc verify` summary line into this plan's Proof section, tick the steps, and commit.
