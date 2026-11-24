@@ -25,7 +25,7 @@ from: spec.md
 - [x] 3. **Verify step (control-plane edit; the owner approves).** In `.sdlc/config.toml` `[verify] steps`, add after the shellcheck entry:
   `{ name = "quadlets", run = "PODMAN=\"${PODMAN:-$(command -v podman || echo /opt/podman/bin/podman)}\" scripts/check-quadlets --skip-if-no-podman" },`
   Don't add a `fast` key, so `--fast` runs the same command. Run AC1 from Claude's shell (no podman on PATH), then the PATH-podman case. Commit: `0008: run the quadlet check in sdlc verify`.
-- [ ] 4. **Record the proof.** Paste the AC results and the `sdlc verify` summary line into this plan's Proof section, tick the steps, and commit.
+- [x] 4. **Record the proof.** Paste the AC results and the `sdlc verify` summary line into this plan's Proof section, tick the steps, and commit.
 
 ## Risks
 - **Riskiest step: 3, the config edit.** A TOML quoting mistake, or a `/bin/sh` expansion mistake in `run`, would break every verify, not just this step. The mitigation is to run `sdlc verify` straight after the edit. Each step's run string is hashed into verify's state, so earlier passes stop counting, which is expected.
@@ -47,6 +47,15 @@ from: spec.md
 - AC5 (0008 R6): `scripts/check-quadlets --help | grep -- --skip-if-no-podman`. `shellcheck -x scripts/check-quadlets` exits 0. `grep -n 'couchdb.env' scripts/check-quadlets` matches only the `couchdb.env.example` staging line (and comments).
 - AC6 (0008 R7): `grep -n '0008' docs/decisions/0001-container-runtime-and-deployment.md` shows the amendment and the Consequences bullet. `grep -n '0002 adds' …` finds only the original "Podman compatibility" sentence on line 84, which stays as the ADR's record and is corrected by the amendment beneath it.
 - AC7: a full `sdlc verify` ends with `verify: PASS`. Paste the summary line here.
+- **Results (2026-11-24, macOS, Podman 6 machine running, Claude shell with no podman on PATH):**
+  - AC1: `sdlc verify` → `── quadlets: …`, `check-quadlets: OK`, `verify: PASS (shellcheck, quadlets) in 0.8s`. `sdlc verify --fast` → the same. With `/opt/podman/bin` on PATH → `check-quadlets: OK`. With `PODMAN=/nonexistent/podman` exported → `check-quadlets: SKIPPED — podman not found …`, step ✓ (the accepted skip-shows-✓ limitation).
+  - AC2: `mem_limit` 512m→256m → rc=1, diff on `couchdb.container` (`Memory=256mb` vs `512mb`), `--write` hint. `BogusKey=1` in `[Container]` → rc=1, `unsupported key 'BogusKey' in group 'Container'`, `quadlet -dryrun -user rejected deploy/quadlets/`, `FAILED: diff dry-run`.
+  - AC3: not found → `SKIPPED — podman not found ('/nonexistent/podman') …`, rc=0. Bogus `CONTAINER_HOST` → `SKIPPED — podman ('/opt/podman/bin/podman') can't reach an engine …`, rc=0.
+  - AC4: the same two without the flag → rc=1 with the matching reason.
+  - AC5: `--help` lists `--skip-if-no-podman`; `shellcheck -x` exits 0; the only `couchdb.env` line is 112, the `couchdb.env.example` staging copy.
+  - AC6: `0008` on line 90 (amendment) and line 322 (Consequences); `0002 adds` only on line 84.
+  - AC7: `verify: PASS (shellcheck, quadlets) in 0.7s, tree 6afc38c4ba31`.
+  - Not measured: how long `podman info` takes to fail against a real stopped Podman machine (AC3b's bogus socket fails at once). A real check takes about 0.6s.
 - **Rollback:** `git revert` the merge commit on main. The `quadlets` step leaves verify, the ADR text returns to before, and the script goes back to its old behaviour. Nothing outside the repo changes (no hosts, data or images), so there's nothing else to undo.
 
 ## Parallel tracks
