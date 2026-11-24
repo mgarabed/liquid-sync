@@ -41,7 +41,7 @@ from: intent.md
 - Not changed: what the check validates, the pinned image digests, `compose.yaml` and `deploy/quadlets/`.
 
 ## Acceptance criteria
-- AC1 (R1): run from Claude's shell, where PATH has no podman, `sdlc verify` output contains a `── quadlets:` line, then `check-quadlets: OK` (not `SKIPPED`), and ends with `verify: PASS (shellcheck, quadlets)`. `sdlc verify --fast` shows the same step and ends with `verify: PASS [fast] (shellcheck, quadlets)`.
+- AC1 (R1): run from Claude's shell, where PATH has no podman, `sdlc verify` output contains a `── quadlets:` line, then `check-quadlets: OK` (not `SKIPPED`), and ends with `verify: PASS (shellcheck, quadlets)`. `sdlc verify --fast` shows the same step and ends with `verify: PASS (shellcheck, quadlets)` (this repo has no `fast` commands, so `--fast` is a full run and its summary carries no `[fast]` label).
 - AC2 (R2, R4): in a scratch copy of the repo (outside the working tree), changing `mem_limit` in `compose.yaml` makes `scripts/check-quadlets --skip-if-no-podman` exit non-zero, name the differing file, and print the `--write` hint. Corrupting a key in a committed quadlet in the scratch copy makes it exit non-zero with `quadlet -dryrun -user rejected`.
 - AC3 (R3): `PODMAN=/nonexistent/podman scripts/check-quadlets --skip-if-no-podman` exits 0 and prints a `SKIPPED` line that says "not found". `CONTAINER_HOST=unix:///nonexistent.sock scripts/check-quadlets --skip-if-no-podman` (engine unreachable) exits 0 and prints a `SKIPPED` line that says it can't reach an engine.
 - AC4 (R5): the two commands from AC3, without `--skip-if-no-podman`, each exit non-zero with the matching reason.
