@@ -10,7 +10,7 @@ from: spec.md
 - `scripts/check-quadlets` (edit) — add the `--skip-if-no-podman` flag and a Podman availability check (binary found, engine reachable) that runs before any staging (0008 R3–R6).
 - `docs/decisions/0001-container-runtime-and-deployment.md` (edit) — a dated amendment under "Podman compatibility" and a corrected Consequences bullet (0008 R7).
 - `.sdlc/config.toml` (edit) — add the `quadlets` verify step after shellcheck (0008 R1). This is a control-plane file, so the owner approves the edit.
-- `work/0008-run-0002-s-quadlet-check-in-sdlc-verify/plan.md` (edit) — tick steps and record the proof results.
+- `work/done/0008-run-0002-s-quadlet-check-in-sdlc-verify/plan.md` (edit) — tick steps and record the proof results.
 
 ## Order of work
 - [x] 1. **Script: the availability check and the flag.** In `scripts/check-quadlets`:

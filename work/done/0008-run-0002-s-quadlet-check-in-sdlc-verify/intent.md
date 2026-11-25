@@ -2,7 +2,7 @@
 id: 0008
 title: Run 0002's quadlet check in sdlc verify
 type: chore
-status: in-review
+status: merged
 risk: low
 tier: high
 priority: P2
@@ -16,6 +16,8 @@ spec_hash: requirements=5873c25c014b;acceptance-criteria=8538e7d40ce1;areas-of-c
 started: 2026-11-24T23:07:05+00:00
 submitted: 2026-11-24T23:23:59+00:00
 submitted_verify: full
+merged: 2026-11-25T03:17:50+00:00
+checks: none
 ---
 # Intent: Run 0002's quadlet check in sdlc verify
 
