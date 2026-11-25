@@ -10,7 +10,7 @@ PODMAN_IMAGE="quay.io/podman/stable:v6.1.3@sha256:1d280cfab8e4cdaa221229c121f681
 
 usage() {
   cat <<'EOF'
-Usage: scripts/check-quadlets [--write] [--help]
+Usage: scripts/check-quadlets [--write] [--skip-if-no-podman] [--help]
 
 Regenerates the quadlets from compose.yaml with podlet and compares them with
 the committed files in deploy/quadlets/, then validates the committed files
@@ -18,6 +18,9 @@ with `quadlet -dryrun -user`. Exits non-zero on any difference or error.
 
   --write   Replace deploy/quadlets/ with freshly generated files, then
             validate them. Use after editing compose.yaml.
+  --skip-if-no-podman
+            Exit 0 with a SKIPPED warning when Podman isn't installed or
+            can't reach an engine; every other failure still fails.
   --help    Show this help.
 
 Set PODMAN to the podman binary if it isn't on PATH
@@ -28,17 +31,39 @@ EOF
 die() { echo "check-quadlets: $*" >&2; exit 1; }
 
 write=0
+skip_if_no_podman=0
 for arg in "$@"; do
   case "$arg" in
     --write) write=1 ;;
+    --skip-if-no-podman) skip_if_no_podman=1 ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; die "unknown argument: $arg" ;;
   esac
 done
 
 PODMAN="${PODMAN:-podman}"
-command -v "$PODMAN" >/dev/null 2>&1 \
-  || die "podman not found ('$PODMAN'); set PODMAN=/opt/podman/bin/podman or add it to PATH"
+
+# Prints why Podman is unavailable and returns 0, or returns 1 when it's usable.
+# Only these two cases may be skipped (0008 R3, R4): once Podman is reachable,
+# any later failure must fail the check, flag or not.
+podman_unavailable_reason() {
+  if ! command -v "$PODMAN" >/dev/null 2>&1; then
+    echo "podman not found ('$PODMAN'); set PODMAN or add it to PATH"
+  elif ! "$PODMAN" info >/dev/null 2>&1; then
+    echo "podman ('$PODMAN') can't reach an engine (is the Podman machine running?)"
+  else
+    return 1
+  fi
+}
+
+# Runs before any staging, so a skip creates nothing.
+if reason="$(podman_unavailable_reason)"; then
+  if [ "$skip_if_no_podman" -eq 1 ]; then
+    echo "check-quadlets: SKIPPED — $reason; the quadlet check did not run" >&2
+    exit 0
+  fi
+  die "$reason"
+fi
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 committed="$root/deploy/quadlets"
