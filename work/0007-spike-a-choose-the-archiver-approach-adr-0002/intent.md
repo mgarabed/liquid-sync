@@ -2,17 +2,19 @@
 id: 0007
 title: Spike A: choose the archiver approach (ADR 0002)
 type: chore
-status: building
+status: in-review
 risk: low
 tier: standard
 priority: P2
 author: Mike Garabedian
 created: 2026-11-21
 branch: work/0007-spike-a-choose-the-archiver-approach-adr-0002
-pr: 
+pr: 7
 depends: 0003
 spec_hash: requirements=e980e6e8a5e3;acceptance-criteria=0dadab42db4b;areas-of-concern=f965e15c7e4a
 started: 2026-11-26T14:21:30+00:00
+submitted: 2026-11-26T14:35:01+00:00
+submitted_verify: full
 ---
 # Intent: Spike A: choose the archiver approach (ADR 0002)
 
