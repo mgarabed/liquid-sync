@@ -8,8 +8,9 @@ tier:
 priority: P2
 author: Mike Garabedian
 created: 2026-11-26
-branch:
-pr:
+branch: 
+pr: 
+depends: 0005, 0012, 0013
 ---
 # Intent: Add liquid-sync setup-uri with a terminal QR code
 
