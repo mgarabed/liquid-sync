@@ -213,7 +213,8 @@ videos), and per-device names for conflict attribution.
 4. Manually connect the Mac test vault over `localhost`, then add the Tailscale
    sidecar and connect the iPhone over HTTPS.
 5. Start Spike A: look for a maintained LiveSync file-bridge or CLI before
-   considering the other archiver options.
+   considering the other archiver options. Done: see
+   [ADR 0002](decisions/0002-archiver-approach.md).
 
 ## 9. Open questions
 
