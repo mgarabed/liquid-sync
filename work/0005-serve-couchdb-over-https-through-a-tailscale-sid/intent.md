@@ -10,7 +10,7 @@ author: Mike Garabedian
 created: 2026-11-21
 branch: 
 pr: 
-depends: 0003, 0010
+depends: 0003, 0010, 0011
 ---
 # Intent: Serve CouchDB over HTTPS through a Tailscale sidecar
 
