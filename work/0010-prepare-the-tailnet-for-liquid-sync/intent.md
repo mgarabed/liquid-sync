@@ -1,21 +1,21 @@
 ---
-id: 0007
-title: Spike A: choose the archiver approach (ADR 0002)
+id: 0010
+title: Prepare the tailnet for liquid-sync
 type: chore
 status: draft
 risk: low
 tier: 
 priority: P2
 author: Mike Garabedian
-created: 2026-11-21
+created: 2026-11-25
 branch: 
 pr: 
-depends: 0003
+source: 0005
 ---
-# Intent: Spike A: choose the archiver approach (ADR 0002)
+# Intent: Prepare the tailnet for liquid-sync
 
 ## Problem
-The archiver design is undecided; evaluate an existing LiveSync file bridge/CLI first, then headless Obsidian, then a custom _changes reader, and record the choice plus the E2EE key-on-server trade-off in docs/decisions/0002 (plan D1, D2, Phase 3).
+Enable MagicDNS and HTTPS certificates, add tag:liquid-sync with tagOwners, and an ACL limiting tailnet access to the node's HTTPS port; decide where that policy is declared (this repo, the homelab repo, or the console). 0005 depends on it.
 
 ## Proposed outcome
 <!-- What "better" looks like, observable from the outside. -->
