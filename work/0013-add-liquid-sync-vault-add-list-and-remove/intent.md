@@ -11,6 +11,7 @@ created: 2026-11-26
 branch: 
 pr: 
 source: 0007
+depends: 0012
 ---
 # Intent: Add liquid-sync vault add, list and remove
 
