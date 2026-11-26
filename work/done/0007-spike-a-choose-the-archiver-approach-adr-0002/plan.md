@@ -9,7 +9,7 @@ from: spec.md
 ## Files that change
 - `docs/decisions/0002-archiver-approach.md` (new) — ADR 0002: options (a)–(d), comparison table, the D1 and D2 decisions, runtime, Evidence and Consequences (0007 R1–R8).
 - `docs/project-plan.md` (edit) — mark D1 and D2 resolved with links to the ADR, link the Phase 3 Spike A bullet, and update component 4's row if the decision contradicts it (0007 R9).
-- `work/0007-spike-a-choose-the-archiver-approach-adr-0002/plan.md` (edit) — tick steps and record the proof results.
+- `work/done/0007-spike-a-choose-the-archiver-approach-adr-0002/plan.md` (edit) — tick steps and record the proof results.
 
 ## Order of work
 - [x] 1. **Collect evidence for (b), the bridges and CLIs.** Start from the LiveSync README and docs (https://github.com/vrtmrz/obsidian-livesync) and follow every linked bridge, CLI or headless tool. For each candidate, record: repo URL, maintainer, licence, last release and its date, release cadence over the last 12 months, open issues touching E2EE or the storage format, what it outputs (files to a folder or something else), the runtime and language it needs, whether a container image exists (and which architectures), and which LiveSync versions it claims to support. Record each fact with its URL, the read date, and a label (`documented`, `read in source` or `inferred`) in a working notes section at the end of the ADR draft. Commit the ADR skeleton with these notes: `0007: start ADR 0002 with option (b) evidence`.

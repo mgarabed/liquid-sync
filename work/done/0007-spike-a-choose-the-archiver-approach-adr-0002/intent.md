@@ -2,7 +2,7 @@
 id: 0007
 title: Spike A: choose the archiver approach (ADR 0002)
 type: chore
-status: in-review
+status: merged
 risk: low
 tier: standard
 priority: P2
@@ -15,6 +15,8 @@ spec_hash: requirements=e980e6e8a5e3;acceptance-criteria=0dadab42db4b;areas-of-c
 started: 2026-11-26T14:21:30+00:00
 submitted: 2026-11-26T14:35:01+00:00
 submitted_verify: full
+merged: 2026-11-26T15:00:10+00:00
+checks: none
 ---
 # Intent: Spike A: choose the archiver approach (ADR 0002)
 
