@@ -64,7 +64,7 @@ Consequences).
     both directions and its daemon watches the output folder, so the
     read-only guarantee has to come from outside the CLI (see Decision). It's
     young (the CLI shipped with the 1.0 line), and it has had data-loss bugs
-    in its write paths (#1143, #1304, both fixed). It keeps its own PouchDB
+    in its write paths (#1143, #1304, both fixed according to the maintainer; #1365 on `fetch --force` is open). It keeps its own PouchDB
     copy of each vault.
   - Gives up: control over release timing. It ships with the plugin, several
     releases a week.
@@ -103,16 +103,25 @@ For each vault:
 
 1. CouchDB replicates `<vault>` to `<vault>-archive` with a continuous,
    one-way `_replicator` job. The job runs as a dedicated replicator user,
-   which can read `<vault>` and write `<vault>-archive`. It doesn't use the
-   admin, so the job document stored in CouchDB holds no admin credentials.
-   CouchDB's replicator is the only reader of the client database.
+   not the admin, so its job document holds no admin credentials. Its
+   password is still stored in that document, readable by CouchDB admins.
+   CouchDB has no read-only role, so a member of `<vault>` can write to it:
+   the replicator user could write to a client database if its password
+   leaked or the job's source and target were swapped. Phase 3 tries a
+   `validate_doc_update` on `<vault>` that rejects writes from that user,
+   checking that LiveSync clients tolerate a design document there. If they
+   don't, the risk is accepted explicitly. The source and target are then
+   fixed by the `vault add` code, and `doctor` checks them.
 2. The CLI runs as `daemon` against `<vault>-archive`, with an archiver user.
    `vault add` sets the mirror's `_security` so that only the archiver and
    replicator users are members, and no client user. The CLI follows the
    mirror's `_changes` feed and writes the vault as plain files into an
    output directory that nothing else writes to.
-3. A bash committer container commits that directory on a debounce, then
-   pushes. The git directory sits outside the vault folder
+3. A bash committer container commits that directory, then pushes. It
+   commits only when the CLI is idle: the mirror's `update_seq` has been
+   processed and the folder has had no writes for the debounce period. It
+   refuses a commit that deletes more than a set share of the tracked files,
+   and `doctor` reports the refusal for a human to look at. The git directory sits outside the vault folder
    (`git --git-dir … --work-tree …`), so git never writes into it. The two
    containers share the output directory as a named volume, mounted
    read-write in the CLI and read-only in the committer. That's not a bind
@@ -126,7 +135,8 @@ For each vault:
 This is how the archiver keeps the "only reads" rule. The CLI has no
 read-only mode: `sync` and `daemon` replicate both ways, register the node in
 remote `_local` documents, and push anything its file watcher sees. Its two
-reported data-loss bugs (#1143, #1304) were in those write paths. With the
+reported data-loss bugs (#1143, #1304, both fixed according to the
+maintainer) were in those write paths. With the
 mirror, the archiver's credentials can't reach a client database at all, so a
 CLI bug can corrupt only the mirror and the archive. Git history undoes the
 archive, and resetting the mirror (below) undoes the mirror. That isolation
@@ -138,36 +148,59 @@ vaults can afford.
 The CLI still writes to the mirror: conflict merges, its node registration,
 and anything its watcher or startup scan wrongly sees. One-way replication
 never removes those writes, so the mirror can drift from the source. The
-archiver reconciles them instead of trusting the mirror. It periodically
-compares the source and the mirror (the live document IDs and their winning
-revisions, ignoring `_local` documents and the CLI's own conflict-resolution
-revisions on top of a source revision). If they disagree, it resets the
-mirror.
+archiver reconciles them instead of trusting the mirror. On a fixed
+interval it compares the Metadata documents in the source and the mirror:
+their IDs, winning revisions and `children`. It ignores `_local` documents
+and chunks, which LiveSync's garbage collection may purge from the source
+without the purge replicating. A disagreement that persists across two
+checks triggers a reset of the mirror.
+
+The same comparison detects a client's "overwrite remote", which rewrites
+the source with new content and often a new salt, whether it recreates the
+database or wipes it in place. The archiver also polls the source's
+`_local/obsidian_livesync_sync_parameters` and resets when the salt changes.
+How "overwrite remote" rewrites a CouchDB remote is `inferred`, not read in
+source, so Phase 3 gates both variants.
+
+**Who does what.** Creating and deleting databases needs a CouchDB server
+admin. So the reset, the reconciliation and the salt poll run in the
+host-side bash CLI (`./liquid-sync`), which already holds the admin from
+`couchdb.env` for `vault add`. They never run inside a container. The CLI
+container and the committer hold no admin credentials and nothing that can
+read `<vault>`.
 
 **Resetting the mirror** is one procedure, used for drift, for a client
-rebuild and for a lost CLI volume. It runs in this order:
+rebuild and for a lost CLI volume. It's rate-limited (at most one an hour per
+vault), and `doctor` reports a vault that resets repeatedly. It runs in this
+order:
 
-1. Stop the CLI daemon first, so its file watcher can't turn the cleared
-   folder into deletions.
-2. Cancel the replicator job.
-3. Delete `<vault>-archive`, the CLI's data volume and the output folder's
+1. Stop the committer, then the CLI daemon. The committer can't commit the
+   emptied folder, and the daemon's watcher can't turn it into deletions.
+2. Check that the archiver's passphrase and ID key still decrypt the source:
+   a throwaway `fetch` of one Metadata document from a fresh mirror, or
+   equivalent. If the check fails (a client changed the passphrase), stop
+   here with both containers stopped, and `doctor` reports it. Nothing has
+   been deleted yet.
+3. Cancel the replicator job.
+4. Delete `<vault>-archive`, the CLI's data volume and the output folder's
    contents.
-4. Recreate the mirror with its `_security`.
-5. Copy `_local/obsidian_livesync_sync_parameters`, which holds the PBKDF2
+5. Recreate the mirror and set its `_security` before anything else touches
+   it. CouchDB runs with `require_valid_user`, so there's no anonymous
+   window.
+6. Copy `_local/obsidian_livesync_sync_parameters`, which holds the PBKDF2
    salt and doesn't replicate, from the source.
-6. Restart the job and wait until it has caught up to the source's
+7. Restart the job and wait until it has caught up to the source's
    `update_seq`.
-7. Run `fetch --force --write-settings` into the empty folder, then start the
-   daemon.
+8. Generate `settings.json` from the CLI's env file, run
+   `fetch --force --write-settings` into the empty folder, then start the
+   daemon. Once it's idle, start the committer.
 
 The committer then commits whatever differs, so deletes made while the
-volume was gone show up as deletes. A new mirror means LiveSync's revision
-numbers restart, so a client's "overwrite remote" (which recreates
-`<vault>`) can't leave older, higher revisions winning in the mirror. The
-archiver detects that case cheaply. It polls the source's
-`_local/obsidian_livesync_sync_parameters` and its database creation
-identity (the `instance_start_time`/UUID from `GET /<vault>`), and resets
-on any change. This is bash and `curl` against CouchDB's HTTP API.
+volume was gone show up as deletes. The mass-delete guard still applies. A
+new mirror means revision numbers restart, so older, higher revisions can't
+win in the mirror. `fetch --force` has an open bug on legacy encrypted
+chunks (#1365), so a reset can fail on old vaults. If it does, the
+containers stay stopped and `doctor` reports it.
 
 - Option (a) is not chosen because it can't fit the 1 GB budget, its GUI
   needs authentication and hardening of its own, and its plugin state lives
@@ -187,13 +220,20 @@ is plaintext, and goal 6 is dropped. Archiving on a client means a device
 that must stay on and run Obsidian, which is option (a) or (d) in another
 place.
 
-- **Where it lives:** each vault's E2EE passphrase (and its ID key, if the
-  vault has one) goes in the archiver's git-ignored `archiver.env`, mode 0600,
-  next to the quadlets, with a committed `archiver.env.example`. The same
-  file holds the archiver's and replicator's CouchDB passwords and the path
-  to each vault's deploy key, and the example lists every one. None of them
-  are ever in git or logs, and that includes the CLI's own startup output,
-  which Phase 3 checks. The CLI keeps it in plaintext in `settings.json` on its data
+- **Where it lives:** each container gets its own git-ignored env file,
+  mode 0600, next to the quadlets, each with a committed `.example` listing
+  its variables (CLAUDE.md's per-service rule):
+  - `archiver.env`, for the CLI: each vault's E2EE passphrase, its ID key if
+    it has one, and the archiver user's CouchDB password.
+  - `committer.env`, for the committer: the path to each vault's deploy key.
+  - The replicator user's password: only in the host-side bash CLI, which
+    writes it into the `_replicator` job.
+
+  No container sees another's secrets. None of them are ever in git or
+  logs, including the CLI's own startup output, `podman inspect` and the
+  units' journal, which Phase 3 checks. `restore` and `vault add` regenerate
+  the CouchDB users and deploy keys, so backups needn't carry them. The CLI
+  keeps the passphrase in plaintext in `settings.json` on its data
   volume, so that volume is a secret too. It should be a rebuildable cache,
   recreated from the mirror with `fetch --force` (`inferred`). Open
   `fetch --force` issues (#1304, #1365) mean a Phase 3 gate has to prove
@@ -371,9 +411,15 @@ gate fails, revisit this ADR rather than working around it.
   fresh mirror holding the copied salt and no Milestone of its own, without
   a client having to accept or unlock it.
 - **Client rebuild:** a client does "overwrite remote", then edits files that
-  already existed. The archiver detects the new salt and database identity,
+  already existed. Run it twice: once with a new salt, and once with the salt
+  unchanged, which reconciliation alone has to catch. Each time the archiver
   resets the mirror, and the archive ends with the edited content, not the
   old revisions.
+- **Changed passphrase:** a client rebuild with a new passphrase stops the
+  reset at its decrypt check. Both containers stay stopped, nothing is
+  deleted or committed, and `doctor` reports it.
+- **Mass-delete guard:** emptying the output folder by hand while the
+  committer runs produces no commit, and `doctor` reports the refusal.
 - **Rebuildable data volume:** with the daemon stopped, a file is deleted on
   a client while the CLI's volume is gone. A reset in the order above then
   rebuilds the volume with `fetch --force`, with E2EE on, gives the same
@@ -387,14 +433,17 @@ gate fails, revisit this ADR rather than working around it.
 - **Lag per stage:** `doctor` reports both stages:
   - the replicator job's state from `_scheduler/docs`, and the source's
     `update_seq` against the mirror's;
-  - the time since the archive last changed against the time since the
-    mirror last changed, and the file list from the CLI's `ls` against the
-    output folder.
+  - for the CLI, whether it has processed the mirror's `update_seq`, with
+    timestamps used only when the sequences differ, so an idle vault
+    doesn't raise a false alarm, and the file list from the CLI's `ls`
+    against the output folder.
 
   A job in `error` or `crashing` state, or a missing file, fails the check.
 - **Memory and disk on the Pi:** measure the CLI and committer under
   `mem_limit:` on the Pi 4 during a full first sync of the largest real
-  vault, plus CouchDB's growth from the mirror databases. Everything must fit
+  vault, with one CLI daemon per vault running at the intended vault count,
+  plus CouchDB's growth from the mirror databases. Record the supported
+  number of vaults. Everything must fit
   ADR 0001's 1 GB, or that ADR is reopened. Also measure disk per vault,
   across the source, mirror, PouchDB copy, output folder and git.
 - **LiveSync pinning and the upgrade check:** the CLI runs on the exact,
@@ -411,10 +460,20 @@ gate fails, revisit this ADR rather than working around it.
   - Both containers run with read-only root filesystems, no added
     capabilities, and networks limited to CouchDB (CLI) and the git remote
     (committer).
-  - No secret appears in either container's logs.
+  - Each container's environment and mounts hold only its own secrets: the
+    CLI has no deploy key or replicator password, and the committer has no
+    passphrase and no CLI data volume.
+  - No secret appears in either container's logs, in `podman inspect`, or
+    in the units' journal.
   - Nothing in a GUI or on the host is hand-edited.
-- **Least privilege:** the archiver user gets 401 or 403 on any access to
-  `<vault>`, and no client user can read or write `<vault>-archive`.
+- **Least privilege:**
+  - The archiver user gets 401 or 403 on any access to `<vault>`.
+  - No client user can read or write `<vault>-archive`.
+  - The replicator user is refused writes to `<vault>` by a
+    `validate_doc_update` that LiveSync clients tolerate, or the ADR is
+    amended to record that risk as accepted.
+  - A newly created mirror has its `_security` set before the replicator
+    job starts.
 
 Other consequences:
 
@@ -434,13 +493,14 @@ Other consequences:
   `.obsidian/plugins/*/data.json`, by default, because the archive is
   plaintext and pushed offsite. Phase 3 decides whether the rest of
   `.obsidian` is archived.
-- The committer may commit a state the CLI is partway through writing. The
-  next commit repairs it, and git history keeps both. Phase 3 can tighten
-  this by committing only when the mirror has no backlog.
 - ADR 0001's compose rules gain two exceptions for the archiver: an exact,
   digest-pinned tag with no auto-update for the CLI (and the committer), and
-  a named volume shared by two containers. Phase 3 records both in ADR
-  0001's checklist.
+  a named volume shared by two containers. Phase 3 appends a dated amendment
+  note to ADR 0001 that links here, as 0008 did. It doesn't rewrite the
+  accepted rules.
+- The committer pins the remote's SSH host key in a `known_hosts` file
+  declared in the repo. The remote refuses force-pushes and branch deletion,
+  so a leaked deploy key can't rewrite history.
 - Plan D4 (the archive remote) has to weigh that the remote sees plaintext.
 - Component 4 in the project plan now reads the mirror's `_changes` feed
   through the LiveSync CLI instead of a custom reader.

@@ -44,14 +44,15 @@ from: spec.md
 <!-- None: one ADR, one consistent comparison; see Risks. -->
 
 ### Proof results (2026-11-26, at c0e4683)
-- AC1: `grep -c` prints 4; `## Evidence` matches at line 186.
+- AC1: `grep -c` prints 4; `## Evidence` matches.
 - AC2: Options has (a)–(d) and a comparison table with one row per option and a column per 0007 R2 criterion; `grep -c 'not chosen because'` prints 3; D1 names option (b).
 - AC3: the awk check over Evidence prints 0; every Evidence bullet carries `documented`, `read in source` or `inferred`.
 - AC4: D2 names the archiver's git-ignored env file (mode 0600) and the CLI data volume, with a paragraph each for host compromise and backup theft.
-- AC5: `### Runtime` at line 165 names `ghcr.io/vrtmrz/livesync-cli:1.0.52-cli@sha256:cf9c…` (amd64 + arm64; exact pin after review round 1); `grep -c ':latest'` prints 0.
+- AC5: `### Runtime` names `ghcr.io/vrtmrz/livesync-cli:1.0.52-cli@sha256:cf9c…` (amd64 + arm64; exact pin after review round 1); `grep -c ':latest'` prints 0.
 - AC6: Consequences lists the round-trip with E2EE on, the memory measurement on the Pi, and LiveSync pinning with the upgrade check.
 - AC7: in Decision and Consequences, Differential ZIP Backup appears once, as a recommended Phase 5 backup.
 - AC8: `ADR 0002` matches in D1, D2 and Phase 3 of `docs/project-plan.md` (and in component 4, which changed to match).
 - AC9: `verify: PASS (shellcheck, quadlets) in 0.9s, tree fdfd54fec60d`
 - After the verifier: tightened evidence labels (mirror isolation, rebuildable volume, memory, plaintext settings) and added gates; AC1–AC8 re-run with the same results. `verify: PASS (shellcheck, quadlets) in 0.8s, tree 2eda09d759ff`
 - After review round 1: design gaps fixed (mirror reset procedure, reconciliation, per-stage lag, exact digest pin as an ADR 0001 exception, named shared volume, push key scope, plaintext remote); AC1–AC8 re-run, same results. `verify: PASS (shellcheck, quadlets) in 0.8s, tree 711cd38bed77`
+- After review round 2: reset ordering and guards (committer stopped, decrypt check, mass-delete guard, rate limit), admin-only steps moved to the host-side CLI, idle-only commits, content-based rebuild detection, per-container env files, replicator write risk and gate; AC1–AC8 re-run, same results. `verify: PASS (shellcheck, quadlets) in 0.8s, tree 7cefa0e98f23`
