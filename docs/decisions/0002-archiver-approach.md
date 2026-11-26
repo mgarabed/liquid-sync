@@ -6,26 +6,188 @@ Work item: `work/0007-spike-a-choose-the-archiver-approach-adr-0002`
 
 ## Context
 
-_To be written in step 5._
+Goal 2 of the [project plan](../project-plan.md) is complete, durable history:
+every vault mirrored as plain Markdown in git, browsable with normal git
+tools and pushed offsite. LiveSync doesn't store files in CouchDB as files. It
+stores Metadata documents that list content-addressed chunks, and with E2EE on
+(goal 6) the chunks are encrypted and the paths can be obfuscated. Something on
+the server has to turn that back into files. That's the archiver, component 4.
+
+Two decisions were open:
+
+- **D1:** how the archiver is built. The plan listed (a) headless Obsidian,
+  (b) an existing LiveSync bridge or CLI, and (c) a custom `_changes` reader.
+  The intent for this spike added (d), LiveSync's suggested backup plugin,
+  Differential ZIP Backup.
+- **D2:** E2EE against the archiver. Decrypting needs the vault passphrase, so
+  either the server holds it or the archive is made somewhere else.
+
+Constraints, from [ADR 0001](0001-container-runtime-and-deployment.md) and
+CLAUDE.md:
+
+- One multi-arch (amd64 and arm64) container per service, rootless under
+  Podman, expressible in `compose.yaml` that podlet converts to quadlets.
+- 1 GB of memory for all liquid-sync containers together, on a 4 GB Pi 4
+  shared with other services.
+- Clients are sacred: the archiver only reads. It never writes to a vault's
+  database.
+- Boring tech: a new language or runtime needs an ADR. This is that ADR.
+- Vaults are small (under 500 MB, mostly Markdown, few binaries), so plain git
+  holds the archive with no LFS.
+- The LiveSync version under test is 1.0.52, which 0003 confirmed against this
+  CouchDB setup.
+
+This is a research-only spike: nothing was cloned or run. Every claim in
+Evidence carries a source, a read date and a label. Claims labelled
+`inferred` that the decision rests on become Phase 3 gates (see
+Consequences).
 
 ## Options
 
-_To be written in step 5._
+- **(a) Headless Obsidian** (linuxserver/obsidian with LiveSync and Obsidian
+  Git in the vault).
+  - Costs: a 1.2 GB arm64 image running a streamed desktop, Electron and
+    Obsidian around the clock. It asks for 1 GB of shared memory, the whole
+    budget, and there are reports of LiveSync in this image exhausting a Pi
+    and a 2 GB VPS. The web UI has no authentication by default and gives
+    passwordless `sudo`. Plugins and their settings live in the vault's
+    `.obsidian/` folder, which Obsidian rewrites, so pinning them is GUI state
+    to manage.
+  - Gives up: the memory budget (ADR 0001 would have to be reopened), a small
+    attack surface, and declarative configuration.
+- **(b) The official Self-hosted LiveSync CLI** (`ghcr.io/vrtmrz/livesync-cli`).
+  Other (b) candidates were weaker. LiveSync Bridge has no licence, no
+  releases and no published image, and its open issues include dropped files
+  and missed changes. filesystem-livesync is unmaintained. The community
+  tools are single-author repos with no releases.
+  - Costs: Node.js arrives inside an upstream image. The CLI replicates in
+    both directions and its daemon watches the output folder, so the
+    read-only guarantee has to come from outside the CLI (see Decision). It's
+    young (the CLI shipped with the 1.0 line), and it has had data-loss bugs
+    in its write paths (#1143, #1304, both fixed). It keeps its own PouchDB
+    copy of each vault.
+  - Gives up: control over release timing. It ships with the plugin, several
+    releases a week.
+- **(c) A custom `_changes` reader.**
+  - Costs: a reimplementation of chunk reassembly, E2EE V2 and the legacy
+    encryption modes, compression, ID-key derivation, path obfuscation and
+    the `used_features` gate. LiveSync's own docs say the format isn't a
+    stable API and that commonlib's code is the authority. Bash can't do the
+    crypto, so it brings a runtime anyway. Using commonlib as a library
+    instead produces a thinner, unmaintained copy of the CLI.
+  - Gives up: upstream tracking. Every commonlib release (eight minors in
+    November 2026) becomes ours to follow.
+- **(d) Differential ZIP Backup.**
+  - Costs: it runs only inside an Obsidian client, and its output is
+    differential ZIPs, not Markdown in git.
+  - Gives up: goal 2 as the archiver. Inside option (a) it would replace
+    Obsidian Git but still produce ZIPs, and it would keep all of (a)'s costs.
+
+### Comparison
+
+| Option | Server-side, no client | Goal 2 output | E2EE and obfuscation | amd64 + arm64 image | Rootless, podlet | Memory vs 1 GB | Maintenance | Licence, consumed as | Pinned by | Cost of a LiveSync change |
+|---|---|---|---|---|---|---|---|---|---|---|
+| (a) Headless Obsidian | Yes, but runs a whole desktop app | Yes, via Obsidian Git | Yes, the plugin itself | Yes, 1218 MB arm64 | Plausible (s6, PUID) but untested | Fails: 1 GB shm asked, reports of more than 2 GB | LinuxServer weekly; Obsidian Git monthly | GPL-3.0 image scripts, Obsidian free for any use; a pulled image | Image tag plus plugin files in `.obsidian/` | Update plugin files by hand to match clients |
+| (b) LiveSync CLI | Yes | Yes, with our git committer | Yes, same core as the plugin | Yes, 92 MB arm64 | Yes: a plain Node image, one process | Likely 100–300 MB (inferred; gate) | Plugin author, released with every plugin release | MIT; a pulled image | `1.0-cli` tag, `podman auto-update` | None by us: same release as the plugin |
+| (c) Custom reader | Yes | Yes | Only if we track commonlib | Ours to build | Yes | Smallest | Ours | MIT commonlib; vendored or reimplemented | Our code | Read and port every format change |
+| (d) Differential ZIP | No: client only | No: ZIPs | Sidesteps it: works on decrypted vault | None: an Obsidian plugin | n/a | n/a on server | Plugin author, monthly | MIT; installed on clients | Plugin version on clients | None to the archive |
 
 ## Decision
 
-_To be written in step 5._
+### D1: the archiver
 
-## Consequences
+**Option (b): the official LiveSync CLI, reading a one-way mirror of each
+vault database, plus a small bash git committer.**
 
-_To be written in step 5._
+For each vault:
 
-## Working notes
+1. CouchDB replicates `<vault>` to `<vault>-archive` with a continuous,
+   one-way `_replicator` job. CouchDB's own replicator is the only reader of
+   the client database.
+2. The CLI runs as `daemon` against `<vault>-archive`, with a CouchDB user
+   that is a member of `<vault>-archive` only. It follows that database's
+   `_changes` feed and writes the vault as plain files into a directory that
+   nothing else writes to.
+3. A bash committer container mounts that directory read-only and commits it
+   on a debounce, with the git directory kept outside the vault folder
+   (`git --git-dir … --work-tree …`), then pushes.
 
-Raw evidence, moved into Evidence in step 5. All read on 2026-11-26 unless
-stated. Labels: `documented` (the project's own docs or README say so),
-`read in source` (seen in code, CI config, registry manifests or issue
-threads), `inferred` (my reading, not stated anywhere).
+This is how the archiver keeps the "only reads" rule. The CLI has no
+read-only mode: `sync` and `daemon` replicate both ways, register the node in
+remote `_local` documents, and push anything its file watcher sees. Its past
+data-loss bugs were all in those write paths. With the mirror, the archiver's
+credentials can't reach a client database at all, so a CLI bug can corrupt
+only the mirror and the archive, and git history can undo both. The mirror
+costs a second copy of each vault in CouchDB, which small vaults can afford.
+
+`_local` documents don't replicate, and LiveSync keeps the PBKDF2 salt in
+`_local/obsidian_livesync_sync_parameters`. So the archiver's setup copies
+that document from `<vault>` to `<vault>-archive` before the CLI first
+connects, and again whenever a client rebuild changes it. That's a few lines
+of `curl` in the bash CLI.
+
+- Option (a) is not chosen because it can't fit the 1 GB budget, its GUI
+  needs authentication and hardening of its own, and its plugin state lives
+  in files Obsidian rewrites, which breaks "no pets".
+- Option (c) is not chosen because it means owning a reimplementation of a
+  format its author says isn't a stable API, which changes several times a
+  month. The CLI is the same code, maintained by the plugin's author.
+- Option (d) is not chosen because it runs only on clients and writes ZIPs, so
+  it can't give server-side Markdown history in git (goal 2).
+
+### D2: E2EE and the passphrase
+
+**Keep E2EE on, and the server holds each vault's passphrase.**
+
+The alternatives are worse. With E2EE off, a stolen CouchDB volume or backup
+is plaintext, and goal 6 is dropped. Archiving on a client means a device
+that must stay on and run Obsidian, which is option (a) or (d) in another
+place.
+
+- **Where it lives:** each vault's E2EE passphrase (and its ID key, if the
+  vault has one) goes in the archiver's git-ignored `archiver.env`, mode 0600,
+  next to the quadlets, with a committed `archiver.env.example`. It's never in
+  git or logs. The CLI keeps it in plaintext in `settings.json` on its data
+  volume, so that volume is a secret too. It's a rebuildable cache: the
+  archiver can recreate it from the mirror with `fetch --force`.
+- **Host compromise:** an attacker with the service user or root on the host
+  already reads the plaintext archive repos, and with the passphrase also
+  decrypts CouchDB and can write encrypted documents. The archiver's CouchDB
+  user can't write to client databases, but `couchdb.env`'s admin can, so E2EE
+  gives no protection against someone who owns the host. Holding the key
+  there adds little beyond what the plaintext archive already exposes.
+- **Backup theft:** a stolen backup holding the CouchDB volume alone reveals
+  nothing, because chunks stay encrypted. The archive repos are plaintext, so
+  Phase 5's backups must be encrypted at rest. `archiver.env` and the CLI's
+  data volume stay out of backups: the passphrase is in the owner's password
+  manager (D5), and the volume rebuilds from the mirror.
+
+### Runtime
+
+The archiver brings **Node.js 22**, only inside the upstream image
+`ghcr.io/vrtmrz/livesync-cli:1.0-cli` (multi-arch amd64 and arm64, built on
+`node:22-slim`, 92 MB compressed on arm64). We write no JavaScript and build
+no image. Bash can't do the job: decrypting E2EE V2 needs PBKDF2, HKDF and
+AES-GCM, and rebuilding files means LiveSync's chunk and ID rules, all of
+which live in LiveSync's own TypeScript core. Running the plugin author's
+image is the smallest dependency that tracks them. It's MIT-licensed,
+released with every plugin release, and needs no vendoring.
+
+The committer is bash and git in a small pinned image (for example
+`docker.io/alpine/git` on a pinned minor tag), chosen in Phase 3.
+
+The CLI follows ADR 0001's tag rule: `1.0-cli` is the major-minor tag, which
+moves with stable releases, so `podman auto-update` brings patch releases.
+That's safe here because the archiver reads only the mirror. A newer CLI
+reads older data, and if it writes a newer database version or feature marker,
+that lands in the mirror, never in a client database. A minor or major
+change (`1.1-cli`) is a commit, tested as below.
+
+## Evidence
+
+All sources were read on 2026-11-26. Labels: `documented` (the project's own docs or
+README say so), `read in source` (seen in code, CI config, registry manifests
+or issue threads), `inferred` (my reading, not stated anywhere).
 
 ### Option (b): bridges and CLIs
 
@@ -47,13 +209,18 @@ Candidates found by following every tool linked from the LiveSync README and
 - Registry check: `1.0.52-cli` resolves to index `sha256:cf9c28ca544e5e84e8825185a81032559c5503ad812c6cd66be4a714bca78a4f` with amd64 and arm64 manifests; the arm64 image is 91.8 MB compressed ([ghcr.io/vrtmrz/livesync-cli](https://github.com/vrtmrz/obsidian-livesync/pkgs/container/livesync-cli), registry API read 2026-11-26). `read in source`
 - Memory: nothing documented. A Node process holding PouchDB/LevelDB for a vault under 500 MB should sit well under 512 MB. `inferred`
 - Open issues touching data safety and storage (read 2026-11-26, `read in source`):
-  - [#1143](https://github.com/vrtmrz/obsidian-livesync/issues/1143) (2026-08-27): the daemon's startup scan deleted 76 documents from CouchDB because a partially warmed file cache truncated the listing. The maintainer says the fix shipped in 1.0.29; the issue is still open.
-  - [#1304](https://github.com/vrtmrz/obsidian-livesync/issues/1304) (2026-10-31): `fetch --force` without `--write-settings` left later commands on an empty database; the daemon re-uploaded every file and local files were deleted. Fixed in 1.0.44, per the maintainer.
-  - [#835](https://github.com/vrtmrz/obsidian-livesync/issues/835) (2026-03-25): chunks reportedly not replicated on push; the reporter later corrected their own measurements. Still open.
-  - [#1365](https://github.com/vrtmrz/obsidian-livesync/issues/1365) (2026-11-17): `fetch --force` aborts on a legacy encrypted chunk document.
-  - [#1346](https://github.com/vrtmrz/obsidian-livesync/issues/1346), [#1328](https://github.com/vrtmrz/obsidian-livesync/issues/1328): daemon rescans and missed files in new directories.
+  - [#1143](https://github.com/vrtmrz/obsidian-livesync/issues/1143) (opened 2026-08-27, read 2026-11-26): the daemon's startup scan deleted 76 documents from CouchDB because a partially warmed file cache truncated the listing. The maintainer says the fix shipped in 1.0.29; the issue is still open. `read in source`
+  - [#1304](https://github.com/vrtmrz/obsidian-livesync/issues/1304) (opened 2026-10-31, read 2026-11-26): `fetch --force` without `--write-settings` left later commands on an empty database; the daemon re-uploaded every file and local files were deleted. Fixed in 1.0.44, per the maintainer. `read in source`
+  - [#835](https://github.com/vrtmrz/obsidian-livesync/issues/835) (opened 2026-03-25, read 2026-11-26): chunks reportedly not replicated on push; the reporter later corrected their own measurements. Still open. `read in source`
+  - [#1365](https://github.com/vrtmrz/obsidian-livesync/issues/1365) (opened 2026-11-17, read 2026-11-26): `fetch --force` aborts on a legacy encrypted chunk document. `read in source`
+  - [#1346](https://github.com/vrtmrz/obsidian-livesync/issues/1346), [#1328](https://github.com/vrtmrz/obsidian-livesync/issues/1328) (read 2026-11-26): daemon rescans and missed files in new directories. `read in source`
 - Supported LiveSync versions: released in lockstep with the plugin from the same source tree and shared core (`@vrtmrz/livesync-commonlib`), so a CLI tag matches the plugin of the same number. `inferred` from the tagging above.
 - Takeaway: every data-loss report above comes from the CLI *writing* (the daemon's file watcher or a rebuild). An archiver only needs remote → local. `inferred`
+- `sync` calls `replicateUserInitiated` and `daemon` calls `replicateUnattended`, then restores live sync and file watching; `mirror` is the scan done during database preparation ([commands/runCommand.ts](https://github.com/vrtmrz/obsidian-livesync/blob/main/src/apps/cli/commands/runCommand.ts), read 2026-11-26). Neither has a pull-only switch. `read in source`
+- Remote writes the CLI makes even when no file changes: the Milestone (`_local/obsidian_livesync_milestone`, "accepted Nodes, locking …") and Node information are `_local` documents, and "do not replicate like ordinary Metadata and Chunks"; the PBKDF2 salt is in `_local/obsidian_livesync_sync_parameters` ([datastructure.md](https://github.com/vrtmrz/obsidian-livesync/blob/main/docs/datastructure.md), read 2026-11-26). `documented`. That the CLI writes its node into the remote Milestone, as the plugin does, is `inferred` from the "not yet accepted" error in `runCommand.ts` (read 2026-11-26).
+- File times: commonlib's Node storage sets file times with `utimes` ([src/platform/node/storage.ts](https://github.com/vrtmrz/livesync-commonlib/blob/main/src/platform/node/storage.ts), read 2026-11-26). `read in source`. So files the CLI writes carry the database's mtime, and the mirror scan's "storage newer" branch shouldn't fire on a folder nobody edits. `inferred`
+- Path obfuscation and the ID key: the CLI's settings are commonlib's full `ObsidianLiveSyncSettings`, built from `createNewVaultSettings()` ([cliSettingsDefaults.ts](https://github.com/vrtmrz/obsidian-livesync/blob/main/src/apps/cli/cliSettingsDefaults.ts), read 2026-11-26), and a setup URI is applied with `setup`. `read in source`. That obfuscated vaults then decode correctly is `inferred` (a Phase 3 gate).
+- Deletions: `mirror` "does not respect file deletions" and skips deleted and conflicted entries; `daemon` follows the `_changes` feed ([CLI README](https://github.com/vrtmrz/obsidian-livesync/blob/main/src/apps/cli/README.md), read 2026-11-26). `documented`. That `daemon` removes a file from the output folder when a client deletes it, as the plugin does, is `inferred` (a Phase 3 gate).
 
 **LiveSync Bridge**
 
@@ -70,9 +237,9 @@ Candidates found by following every tool linked from the LiveSync README and
 
 **Community tools** (GitHub search, read 2026-11-26)
 
-- [Skyxim/livesync-git-backup](https://github.com/Skyxim/livesync-git-backup): runs the LiveSync CLI daemon (from a personal fork) in compose and commits the vault folder to a bare git repo on a timer. Created and last pushed 2026-10-07, no licence, no releases, 0 stars. `read in source`. It is the same shape this ADR is weighing, but not something to depend on.
-- [tgmstudios/obsidian-livesync-headless](https://github.com/tgmstudios/obsidian-livesync-headless): an independent Node reimplementation, bidirectional, MIT, 11 stars, no releases, last push 2026-09-29. `read in source`. A third-party reimplementation of the storage format has the costs of option (c) without our control over it.
-- Other hits (`gmcouto/obsidian-livesync-headless`, `MrYadro/livesync-headless`, `atty303/obsidian-livesync-cli`, …) have 0–1 stars and no releases. Not evaluated further.
+- [Skyxim/livesync-git-backup](https://github.com/Skyxim/livesync-git-backup) (read 2026-11-26): runs the LiveSync CLI daemon (from a personal fork) in compose and commits the vault folder to a bare git repo on a timer. Created and last pushed 2026-10-07, no licence, no releases, 0 stars. `read in source`. It is the same shape this ADR is weighing, but not something to depend on.
+- [tgmstudios/obsidian-livesync-headless](https://github.com/tgmstudios/obsidian-livesync-headless) (read 2026-11-26): an independent Node reimplementation, bidirectional, MIT, 11 stars, no releases, last push 2026-09-29. `read in source`. A third-party reimplementation of the storage format has the costs of option (c) without our control over it.
+- Other hits (`gmcouto/obsidian-livesync-headless`, `MrYadro/livesync-headless`, `atty303/obsidian-livesync-cli`, …) have 0–1 stars and no releases. Not evaluated further. `read in source` (GitHub search, read 2026-11-26)
 
 ### Option (a): headless Obsidian
 
@@ -109,3 +276,59 @@ Candidates found by following every tool linked from the LiveSync README and
 - Revisions: a restore dialog picks a file's revision or a restore point in time ([README](https://github.com/vrtmrz/diffzip/blob/main/README.md), read 2026-11-26). `documented`. Revisions exist only as often as a client runs a backup, so the granularity is per backup, not per edit. `inferred`
 - Encryption: "the ZIP file will be encrypted by AES-256-CBC with the passphrase", decryptable with `openssl enc -d -aes-256-cbc … -pbkdf2 -md sha256` ([README](https://github.com/vrtmrz/diffzip/blob/main/README.md), read 2026-11-26). `documented`. It works on the decrypted vault on a client, so it doesn't need the LiveSync passphrase on any server. `inferred`
 - Fit against goal 2: ZIPs, not browsable Markdown in git; it needs Obsidian running to take a backup. As the archiver it fails goal 2. Inside option (a) it would replace Obsidian Git but still output ZIPs. As an independent backup it is a second, differently built copy that doesn't depend on CouchDB or the archiver. `inferred`
+
+## Consequences
+
+The Phase 3 archiver item must pass these gates before the archiver is
+trusted. Each gate turns an `inferred` claim above into a measured one. If a
+gate fails, revisit this ADR rather than working around it.
+
+- **Round-trip with E2EE on:** fixture vault → LiveSync 1.0.52 on a client →
+  CouchDB → mirror → CLI → committer → files, then a diff against the
+  original. Run it with E2EE, path obfuscation and the default random ID key
+  on, and include a binary, a nested folder, a non-ASCII (NFC) file name, an
+  edit, a rename, a delete and a conflicted note. The delete must disappear
+  from the output and the rename must leave no stale copy.
+- **Clients untouched:** after the round-trip, the client database has no
+  revision written by the archiver, and the archiver's CouchDB user gets 401
+  or 403 on any write to it.
+- **Mirror stays faithful:** the mirror has no revision the client database
+  lacks, other than `_local` documents. The salt document is copied before
+  the CLI first connects, and a client rebuild (new salt, recreated database)
+  is detected, so the mirror and the CLI's data volume are rebuilt and not
+  left decrypting with a stale salt.
+- **Memory on the Pi:** measure the CLI and committer under `mem_limit:` on
+  the Pi 4 during a full first sync of the largest real vault, plus CouchDB's
+  growth from the mirror databases. Everything must fit ADR 0001's 1 GB, or
+  that ADR is reopened.
+- **LiveSync pinning and the upgrade check:** the CLI runs on `1.0-cli` and
+  clients on the same major-minor. Before clients move to a new minor or
+  major, the round-trip test runs against the matching CLI tag on the
+  fixture vault (plan §5.3). `doctor` reports the running CLI version and
+  archiver lag, so a patch release that breaks the archiver shows up as lag,
+  not silence.
+- **Unattended start:** the CLI starts from the archiver's env file with no
+  prompts, as the rootless service user, from podlet-generated quadlets.
+  Nothing in a GUI or on the host is hand-edited.
+
+Other consequences:
+
+- **Differential ZIP Backup** has one role: it's recommended to Phase 5's
+  `backup` item as an optional, client-side disaster-recovery backup (for
+  example, the Mac backing up to an S3 bucket with its AES-256 passphrase).
+  It's independent of CouchDB and the archiver. This is a recommendation, not
+  a decision. The `backup` item decides whether to adopt it.
+- Phase 5's backups must be encrypted at rest, since the archive repos are
+  plaintext. They exclude the archiver's env file and the CLI's data volume.
+- Each vault gets a second CouchDB database, `<vault>-archive`, and an
+  archiver CouchDB user that can reach only that database. `vault add` and
+  `vault remove` manage both, and so does `doctor`'s per-vault check.
+- Component 4 in the project plan now reads the mirror's `_changes` feed
+  through the LiveSync CLI instead of a custom reader.
+- ADR 0001's budget is not reopened by this decision. That rests on the
+  memory gate above.
+- Revisit this ADR if the CLI is abandoned or stops releasing with the
+  plugin, if it gains a supported read-only mode (the mirror could then be
+  dropped), or if LiveSync's archive-relevant format moves to a separate,
+  stable API.
+- A wrong decision here is superseded by a new ADR, not edited.
