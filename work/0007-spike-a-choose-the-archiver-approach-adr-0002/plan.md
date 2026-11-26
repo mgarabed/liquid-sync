@@ -18,7 +18,7 @@ from: spec.md
 - [x] 4. **Evidence for (d), Differential ZIP Backup** (https://github.com/vrtmrz/diffzip). Confirm from its README and source: client-only operation, output format, encryption, S3 target, revision model, maintenance and licence. Weigh its three candidate roles (the archiver, inside (a), a Phase 5 backup). Commit.
 - [x] 5. **Write the decision.** Fill in Context, Options (costs and what's given up for each option), the comparison table across 0007 R2's criteria, and the Decision: D1 (one option, with a "not chosen because" line for each of the other three), D2 (the threat under host compromise and backup theft, where a passphrase lives, the recommendation), and Runtime. Then write Consequences: the Phase 3 gates (the round-trip test with E2EE on, a memory measurement on the Pi, LiveSync pinning and the upgrade check, and every inferred claim the decision rests on), plus the Phase 5 recommendation for Differential ZIP Backup if any. Move the working notes into Evidence. Status: `proposed`. Commit: `0007: decide the archiver approach in ADR 0002`.
 - [x] 6. **Project plan.** D1 and D2 get `_Resolved:_ … See [ADR 0002](decisions/0002-archiver-approach.md).`, the Phase 3 Spike A bullet gets the link, and component 4's row changes only if the decision contradicts it. Commit.
-- [ ] 7. **Proof.** Run AC1–AC8 and `sdlc verify`, record the results here, and tick the steps. Commit. On merge, the ADR's Status becomes `accepted` (as ADR 0001's did).
+- [x] 7. **Proof.** Run AC1–AC8 and `sdlc verify`, record the results here, and tick the steps. Commit. On merge, the ADR's Status becomes `accepted` (as ADR 0001's did).
 
 ## Risks
 - **Riskiest step: 5.** A decision resting on inferred claims is the spike's main failure mode. The mitigation is the labels (0007 R3) and turning every inferred load-bearing claim into a Phase 3 gate (0007 R7), so a wrong guess fails early in Phase 3 instead of in production.
@@ -42,3 +42,14 @@ from: spec.md
 
 ## Parallel tracks
 <!-- None: one ADR, one consistent comparison; see Risks. -->
+
+### Proof results (2026-11-26, at c0e4683)
+- AC1: `grep -c` prints 4; `## Evidence` matches at line 186.
+- AC2: Options has (a)–(d) and a comparison table with one row per option and a column per 0007 R2 criterion; `grep -c 'not chosen because'` prints 3; D1 names option (b).
+- AC3: the awk check over Evidence prints 0; every Evidence bullet carries `documented`, `read in source` or `inferred`.
+- AC4: D2 names the archiver's git-ignored env file (mode 0600) and the CLI data volume, with a paragraph each for host compromise and backup theft.
+- AC5: `### Runtime` at line 165 names `ghcr.io/vrtmrz/livesync-cli:1.0-cli` (amd64 + arm64); `grep -c ':latest'` prints 0.
+- AC6: Consequences lists the round-trip with E2EE on, the memory measurement on the Pi, and LiveSync pinning with the upgrade check.
+- AC7: in Decision and Consequences, Differential ZIP Backup appears once, as a recommended Phase 5 backup.
+- AC8: `ADR 0002` matches in D1, D2 and Phase 3 of `docs/project-plan.md` (and in component 4, which changed to match).
+- AC9: `verify: PASS (shellcheck, quadlets) in 0.9s, tree fdfd54fec60d`
