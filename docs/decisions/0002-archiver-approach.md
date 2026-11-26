@@ -1,6 +1,6 @@
 # 0002 — Archiver approach and E2EE key handling
 
-Status: proposed
+Status: accepted
 Date: 2026-11-26
 Work item: `work/0007-spike-a-choose-the-archiver-approach-adr-0002`
 
