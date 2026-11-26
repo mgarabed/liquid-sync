@@ -88,7 +88,7 @@ Consequences).
 | Option | Server-side, no client | Goal 2 output | E2EE and obfuscation | amd64 + arm64 image | Rootless, podlet | Memory vs 1 GB | Maintenance | Licence, consumed as | Pinned by | Cost of a LiveSync change |
 |---|---|---|---|---|---|---|---|---|---|---|
 | (a) Headless Obsidian | Yes, but runs a whole desktop app | Yes, via Obsidian Git | Yes, the plugin itself | Yes, 1218 MB arm64 | Plausible (s6, PUID) but untested | Fails: 1 GB shm asked, reports of more than 2 GB | LinuxServer weekly; Obsidian Git monthly | GPL-3.0 image scripts, Obsidian free for any use; a pulled image | Image tag plus plugin files in `.obsidian/` | Update plugin files by hand to match clients |
-| (b) LiveSync CLI | Yes | Yes, with our git committer | Yes, same core as the plugin | Yes, 92 MB arm64 | Yes: a plain Node image, one process | Likely 100–300 MB (inferred; gate) | Plugin author, released with every plugin release | MIT; a pulled image | `1.0-cli` tag, `podman auto-update` | None by us: same release as the plugin |
+| (b) LiveSync CLI | Yes | Yes, with our git committer | Yes, same core as the plugin | Yes, 92 MB arm64 | Yes: a plain Node image, one process | Likely under 512 MB, plus CouchDB's mirror overhead (inferred; gate) | Plugin author, released with every plugin release | MIT; a pulled image | `1.0-cli` tag, `podman auto-update` | None by us: same release as the plugin |
 | (c) Custom reader | Yes | Yes | Only if we track commonlib | Ours to build | Yes | Smallest | Ours | MIT commonlib; vendored or reimplemented | Our code | Read and port every format change |
 | (d) Differential ZIP | No: client only | No: ZIPs | Sidesteps it: works on decrypted vault | None: an Obsidian plugin | n/a | n/a on server | Plugin author, monthly | MIT; installed on clients | Plugin version on clients | None to the archive |
 
@@ -114,10 +114,13 @@ For each vault:
 
 This is how the archiver keeps the "only reads" rule. The CLI has no
 read-only mode: `sync` and `daemon` replicate both ways, register the node in
-remote `_local` documents, and push anything its file watcher sees. Its past
-data-loss bugs were all in those write paths. With the mirror, the archiver's
-credentials can't reach a client database at all, so a CLI bug can corrupt
-only the mirror and the archive, and git history can undo both. The mirror
+remote `_local` documents, and push anything its file watcher sees. Its two
+reported data-loss bugs (#1143, #1304) were in those write paths. With the
+mirror, the archiver's credentials can't reach a client database at all, so a
+CLI bug can corrupt only the mirror and the archive, and git history can undo
+both. That isolation is `inferred` from CouchDB's one-way replication and the
+CLI's credentials. The "Clients untouched" and "Mirror stays faithful" gates
+in Consequences test it. The mirror
 costs a second copy of each vault in CouchDB, which small vaults can afford.
 
 `_local` documents don't replicate, and LiveSync keeps the PBKDF2 salt in
@@ -148,8 +151,10 @@ place.
   vault has one) goes in the archiver's git-ignored `archiver.env`, mode 0600,
   next to the quadlets, with a committed `archiver.env.example`. It's never in
   git or logs. The CLI keeps it in plaintext in `settings.json` on its data
-  volume, so that volume is a secret too. It's a rebuildable cache: the
-  archiver can recreate it from the mirror with `fetch --force`.
+  volume, so that volume is a secret too. It should be a rebuildable cache,
+  recreated from the mirror with `fetch --force` (`inferred`). Open
+  `fetch --force` issues (#1304, #1365) mean a Phase 3 gate has to prove
+  that before backups exclude the volume.
 - **Host compromise:** an attacker with the service user or root on the host
   already reads the plaintext archive repos, and with the passphrase also
   decrypts CouchDB and can write encrypted documents. The archiver's CouchDB
@@ -158,9 +163,10 @@ place.
   there adds little beyond what the plaintext archive already exposes.
 - **Backup theft:** a stolen backup holding the CouchDB volume alone reveals
   nothing, because chunks stay encrypted. The archive repos are plaintext, so
-  Phase 5's backups must be encrypted at rest. `archiver.env` and the CLI's
-  data volume stay out of backups: the passphrase is in the owner's password
-  manager (D5), and the volume rebuilds from the mirror.
+  Phase 5's backups must be encrypted at rest. `archiver.env` stays out of
+  backups, because the passphrase is in the owner's password manager (D5).
+  The CLI's data volume joins it once the rebuildable-volume gate in
+  Consequences passes. Until then the volume is backed up, encrypted.
 
 ### Runtime
 
@@ -178,8 +184,9 @@ The committer is bash and git in a small pinned image (for example
 
 The CLI follows ADR 0001's tag rule: `1.0-cli` is the major-minor tag, which
 moves with stable releases, so `podman auto-update` brings patch releases.
-That's safe here because the archiver reads only the mirror. A newer CLI
-reads older data, and if it writes a newer database version or feature marker,
+That should be safe here (`inferred`, resting on the mirror isolation
+above), because the archiver reads only the mirror. A newer CLI is expected
+to read older data, and if it writes a newer database version or feature marker,
 that lands in the mirror, never in a client database. A minor or major
 change (`1.1-cli`) is a commit, tested as below.
 
@@ -207,7 +214,8 @@ Candidates found by following every tool linked from the LiveSync README and
 - Runtime: Node.js 22.22 or later. Dependencies include PouchDB 9 with the LevelDB adapter, chokidar and werift (WebRTC) ([package.json](https://github.com/vrtmrz/obsidian-livesync/blob/main/src/apps/cli/package.json), read 2026-11-26). `read in source`
 - Image: `ghcr.io/vrtmrz/livesync-cli`, built on `node:22-slim`, entrypoint `livesync-cli`, data volume `/data` ([Dockerfile](https://github.com/vrtmrz/obsidian-livesync/blob/main/src/apps/cli/Dockerfile), read 2026-11-26). CI builds amd64 and arm64 on native runners and publishes one multi-platform index; stable releases get `<version>-cli`, `<major.minor>-cli`, `latest` and a SHA tag ([cli-docker.yml](https://github.com/vrtmrz/obsidian-livesync/blob/main/.github/workflows/cli-docker.yml), read 2026-11-26). `read in source`
 - Registry check: `1.0.52-cli` resolves to index `sha256:cf9c28ca544e5e84e8825185a81032559c5503ad812c6cd66be4a714bca78a4f` with amd64 and arm64 manifests; the arm64 image is 91.8 MB compressed ([ghcr.io/vrtmrz/livesync-cli](https://github.com/vrtmrz/obsidian-livesync/pkgs/container/livesync-cli), registry API read 2026-11-26). `read in source`
-- Memory: nothing documented. A Node process holding PouchDB/LevelDB for a vault under 500 MB should sit well under 512 MB. `inferred`
+- Memory: nothing documented. A Node process holding PouchDB/LevelDB for a vault under 500 MB should sit under 512 MB; CouchDB's extra load from a mirror database per vault isn't estimated. `inferred`
+- Secrets on disk: the README's settings example stores `"passphrase"` in `.livesync/settings.json`, and an interrupted reconstruction record "can contain settings and credentials; protect it like the settings file" ([CLI README](https://github.com/vrtmrz/obsidian-livesync/blob/main/src/apps/cli/README.md), read 2026-11-26). `documented`
 - Open issues touching data safety and storage (read 2026-11-26, `read in source`):
   - [#1143](https://github.com/vrtmrz/obsidian-livesync/issues/1143) (opened 2026-08-27, read 2026-11-26): the daemon's startup scan deleted 76 documents from CouchDB because a partially warmed file cache truncated the listing. The maintainer says the fix shipped in 1.0.29; the issue is still open. `read in source`
   - [#1304](https://github.com/vrtmrz/obsidian-livesync/issues/1304) (opened 2026-10-31, read 2026-11-26): `fetch --force` without `--write-settings` left later commands on an empty database; the daemon re-uploaded every file and local files were deleted. Fixed in 1.0.44, per the maintainer. `read in source`
@@ -296,7 +304,12 @@ gate fails, revisit this ADR rather than working around it.
   lacks, other than `_local` documents. The salt document is copied before
   the CLI first connects, and a client rebuild (new salt, recreated database)
   is detected, so the mirror and the CLI's data volume are rebuilt and not
-  left decrypting with a stale salt.
+  left decrypting with a stale salt. The CLI must also connect to a mirror
+  that has no Milestone `_local` document of its own, without a client having
+  to accept or unlock it.
+- **Rebuildable data volume:** deleting the CLI's data volume and rebuilding
+  it from the mirror with `fetch --force` gives the same output folder, with
+  E2EE on. Until this passes, Phase 5 backups keep the volume, encrypted.
 - **Memory on the Pi:** measure the CLI and committer under `mem_limit:` on
   the Pi 4 during a full first sync of the largest real vault, plus CouchDB's
   growth from the mirror databases. Everything must fit ADR 0001's 1 GB, or
@@ -319,14 +332,15 @@ Other consequences:
   It's independent of CouchDB and the archiver. This is a recommendation, not
   a decision. The `backup` item decides whether to adopt it.
 - Phase 5's backups must be encrypted at rest, since the archive repos are
-  plaintext. They exclude the archiver's env file and the CLI's data volume.
+  plaintext. They exclude the archiver's env file, and the CLI's data
+  volume once the rebuildable-volume gate passes.
 - Each vault gets a second CouchDB database, `<vault>-archive`, and an
   archiver CouchDB user that can reach only that database. `vault add` and
   `vault remove` manage both, and so does `doctor`'s per-vault check.
 - Component 4 in the project plan now reads the mirror's `_changes` feed
   through the LiveSync CLI instead of a custom reader.
-- ADR 0001's budget is not reopened by this decision. That rests on the
-  memory gate above.
+- ADR 0001's budget isn't reopened yet. Whether it fits is decided by the
+  memory gate above, not by the inferred estimate here.
 - Revisit this ADR if the CLI is abandoned or stops releasing with the
   plugin, if it gains a supported read-only mode (the mirror could then be
   dropped), or if LiveSync's archive-relevant format moves to a separate,

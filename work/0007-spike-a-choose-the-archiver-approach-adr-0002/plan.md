@@ -53,3 +53,4 @@ from: spec.md
 - AC7: in Decision and Consequences, Differential ZIP Backup appears once, as a recommended Phase 5 backup.
 - AC8: `ADR 0002` matches in D1, D2 and Phase 3 of `docs/project-plan.md` (and in component 4, which changed to match).
 - AC9: `verify: PASS (shellcheck, quadlets) in 0.9s, tree fdfd54fec60d`
+- After the verifier: tightened evidence labels (mirror isolation, rebuildable volume, memory, plaintext settings) and added gates; AC1–AC8 re-run with the same results. `verify: PASS (shellcheck, quadlets) in 0.8s, tree 2eda09d759ff`
