@@ -45,13 +45,14 @@ from: spec.md
   - Amend ADR 0003's floor to 5.5, adding the step 4 evidence and the date. Say that the host side agreed, or that the change is pending its agreement, whichever is true at the time.
   - Amend ADR 0001's relative-paths rule.
   - Update the README layout block.
-- [ ] 6. **Hand install on the Podman machine (0011 AC9),** recorded in the PR. Put the commands in a scratch script, not inline: the secrets guard blocks any command line that names the env file. The throwaway env file is written from `couchdb.env.example`'s fake values inside the machine. `COUCHDB_USER` and `COUCHDB_PASSWORD` are exported from those same fake values for `scripts/check-couchdb-config`, because a build worktree has no git-ignored env file to fall back to.
+- [x] 6. **Hand install on the Podman machine (0011 AC9),** recorded in the PR. Put the commands in a scratch script, not inline: the secrets guard blocks any command line that names the env file. The throwaway env file is written from `couchdb.env.example`'s fake values inside the machine. `COUCHDB_USER` and `COUCHDB_PASSWORD` are exported from those same fake values for `scripts/check-couchdb-config`, because a build worktree has no git-ignored env file to fall back to.
   - First run `podman compose down`, without `-v`, so the dev volume is kept. The quadlet unit runs `podman run --replace --name liquid-sync-couchdb` (checked in the 5.5 dry-run), so in a shared rootless store it would otherwise remove the compose stack's container.
   - In `podman machine ssh`, as the machine's default user:
     - copy the bundle to `~/.config/containers/systemd/liquid-sync-test/`;
     - write a throwaway `couchdb.env` there with the fake example values, mode 0600;
     - run `systemctl --user daemon-reload && systemctl --user start couchdb.service`.
   - Check `curl -fsS http://127.0.0.1:5984/_up` inside the machine, then run `scripts/check-couchdb-config` with `COUCHDB_URL` pointing at the machine. If the port isn't forwarded, run the same curl calls inside the machine.
+  - Done (2026-11-27): `config/20-livesync.ini` sets `require_valid_user = true`, so an unauthenticated `_up` returns 401. That 401 is recorded as evidence the config applied, and `_up` is checked again with the throwaway credentials on curl's stdin (`curl -fsS -K -`), which returns `{"status":"ok"}`. Both curl and `scripts/check-couchdb-config` ran inside the machine, from the shared repo path. The test directory was moved into the machine's `/tmp` before removal, so nothing is `rm`'d outside `/tmp`.
   - Record `getenforce`, `uname -m` and `podman --version`.
   - Clean up: stop the unit, remove the test directory, run `daemon-reload` again, and `podman volume rm couchdb-data`.
   - First check that the local compose stack isn't running, because both bind `127.0.0.1:5984`, and that the local stack's volume isn't the one being removed.
