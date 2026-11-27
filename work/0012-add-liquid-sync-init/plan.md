@@ -54,7 +54,7 @@ from: spec.md
   - Then the compose up, the wait and the drift check.
   - Run `bash test/liquid-sync-init.sh` until it's green, then run `sdlc verify --fast`.
 - [x] 5. **Docs:** the README, the project plan, the ADR 0003 amendment and the runbook, as listed above.
-- [ ] 6. **Manual run (0012 AC6), in the worktree.** The worktree has no env file, which is exactly the first-run case, so nothing needs moving.
+- [x] 6. **Manual run (0012 AC6), in the worktree.** The worktree has no env file, which is exactly the first-run case, so nothing needs moving.
   - Tell the user first: this briefly takes over the local dev stack. Compose recreates the `liquid-sync-couchdb` container on the worktree's new password and `config/` mount. The data volume stays.
   - Run `./liquid-sync init` twice, then `git status --short`.
   - For 0012 AC8, run the worktree's `scripts/check-couchdb-config` (now reading the worktree's new env file) and `diff` it against step 1's normal-run baseline. Only `N settings match` lines are compared, and they hold no secrets.
@@ -62,6 +62,8 @@ from: spec.md
   - No `-v` anywhere: the admin is written to `local.d/docker.ini` from the env file when the container is created, not stored in the data volume.
 
   Record both init transcripts in the PR, which contain no secrets by R5. The worktree's env file is deleted along with the worktree.
+
+  *As built:* no stack was running and the main checkout has no env file (see step 1), so nothing was taken over, and the normal-run and 401 baselines came from `main`'s copy in `/tmp/0012-baseline/tree/`. The restore is `podman compose down` (no `-v`) from the worktree, which returns to the state before step 6. It runs in step 7, after the verifier, which may need the stack up.
 - [ ] 7. **Close out.** Run `sdlc verify` (full) and paste the summary line. Run `bash test/liquid-sync-init.sh` and paste its output in the PR, since verify doesn't run it until 0018. Then run the `sdlc:verifier` agent and submit.
 
 ## Risks
