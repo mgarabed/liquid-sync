@@ -1,6 +1,6 @@
 ---
 id: 0005
-title: Serve CouchDB over HTTPS through a Tailscale sidecar
+title: Sync a Mac and an iPhone over HTTPS through svc:liquid-sync
 type: feature
 status: draft
 risk: low
@@ -10,44 +10,46 @@ author: Mike Garabedian
 created: 2026-11-21
 branch: 
 pr: 
-depends: 0003, 0010
+depends: 0003, 0010, 0011
 ---
-# Intent: Serve CouchDB over HTTPS through a Tailscale sidecar
+# Intent: Sync a Mac and an iPhone over HTTPS through svc:liquid-sync
 
 ## Problem
-Clients need a stable private HTTPS hostname that moves with the stack. Today CouchDB is reachable only on `127.0.0.1:5984` on the Mac, so only the Mac can sync, and the iPhone can't reach it at all. That leaves Phase 1's "a Mac and an iPhone sync a test vault both ways" unfinished. Add a Tailscale sidecar with a dedicated node name, with `tailscale serve` in front of CouchDB, then confirm a Mac and an iPhone sync a test vault both ways (plan Phase 1, first step 4). ADR 0001 runs the sidecar rootless in userspace networking (no `/dev/net/tun` and no added capabilities). This item must prove that `tailscale serve` works in that mode, or reopen ADR 0001 (moved here from 0002).
+Clients need a stable private HTTPS hostname that doesn't change when the stack moves to another host. Today CouchDB is reachable only on `127.0.0.1:5984`. The Mac can sync over localhost, but the iPhone can't reach CouchDB at all. That leaves Phase 1's "a Mac and an iPhone sync a test vault both ways" unfinished (plan Phase 1, first step 4).
+
+Rescoped 2026-11-26 after homelab ADR 0005 (accepted 2026-11-26). liquid-sync is now published as the Tailscale Service `svc:liquid-sync` at `https://liquid-sync.<tailnet>.ts.net` on port 443. The host's own `tailscale serve` terminates TLS and forwards to `127.0.0.1:5984`. The homelab repo owns publishing: which hosts advertise the Service, the serve config, and the tailnet policy. The stack only has to bind CouchDB to 127.0.0.1, which it already does. The earlier design, a Tailscale sidecar with its own `liquid-sync-dev` node, is dropped. That removes the auth key, the state volume and the userspace-serve proof.
+
+A Mac signed in as a user can't host a Service, so local development stays on localhost. The end-to-end test runs against the production Pi, the first Service host.
 
 ## Proposed outcome
-- The stack runs a Tailscale sidecar alongside CouchDB that joins the tailnet as its own node, `liquid-sync-dev`, while the stack runs on the dev Mac. The Pi claims `liquid-sync` later.
-- `https://liquid-sync-dev.<tailnet>.ts.net` serves CouchDB with a valid Tailscale certificate, from any device on the tailnet.
-- The Mac's test vault syncs over that HTTPS URL instead of localhost.
-- The test vault on an iPhone syncs live with the Mac in both directions (Phase 1 done).
-- Evidence that `tailscale serve` works in userspace mode under rootless Podman. If it doesn't, ADR 0001 is reopened.
-- `docs/runbooks/local-sync-test.md` covers the HTTPS and iPhone steps.
+- `https://liquid-sync.<tailnet>.ts.net` serves CouchDB from the production Pi with a valid Tailscale certificate. It is reachable from the owner's devices on 443 only.
+- The first live check of what homelab ADR 0005 provides: the Pi advertises `svc:liquid-sync`, its serve config forwards 443 to `127.0.0.1:5984`, and other ports on the Service are refused (handed over from 0010).
+- The Mac's test vault syncs over that URL instead of localhost.
+- The test vault on an iPhone syncs live with the Mac in both directions, both going through the Pi (Phase 1 done).
+- `docs/runbooks/local-sync-test.md` covers the HTTPS and iPhone steps, and says that local development on the Mac stays on `http://127.0.0.1:5984`.
 
 ## Affected users and systems
-- The owner's Mac and iPhone, both on the tailnet, using the test vault from `test/fixtures/` only.
-- `compose.yaml`, the generated `deploy/quadlets/`, a new `tailscale.env.example`, `README.md`, and `docs/runbooks/local-sync-test.md`.
-- The tailnet: the node, its tag and its ACL. These are set up by 0010 (tailnet prerequisites), which this item depends on.
+- The owner's Mac and iPhone, on the tailnet, using the test vault from `test/fixtures/` only.
+- The production Pi, running the stack deployed by 0011 (this item depends on it).
+- `docs/runbooks/local-sync-test.md`, and `README.md` where it describes how the stack is published.
+- `compose.yaml` is expected to stay as it is: CouchDB already binds only to `127.0.0.1:5984`. If the test shows that a change is needed, the change follows ADR 0001's compose rules.
+- The tailnet: the Service, its host tag and its policy. homelab ADR 0005 provides these, tracked by 0010.
 
 ## Constraints
-- ADR 0001's compose rules apply line by line, including the Tailscale one: `tailscale serve` only, never `funnel`; a tagged auth key; a tailnet ACL that limits access to the CouchDB port; and a state volume treated as secret.
-- The sidecar is rootless with userspace networking: no `/dev/net/tun`, no added capabilities, no host ports below 1024.
-- Auth is a one-time tagged auth key in a git-ignored `tailscale.env`. After the first login, the persisted state volume keeps the node logged in, and the key can expire.
-- The memory limit fits ADR 0001's 1 GB total, together with CouchDB's 512m.
-- The `quadlets` verify step from 0008 must pass, so the sidecar has to be expressible through podlet.
-- No secret (auth key, node state, setup URI, CouchDB credentials) appears in logs, the runbook or commits.
-- CouchDB stays bound to loopback on the host. The tailnet reaches it only through the sidecar.
+- This repo never runs `tailscale` and never controls tailscaled. The liquid-sync service user holds no Tailscale credentials. Publishing belongs to the homelab repo.
+- CouchDB stays bound to loopback on the host. The tailnet reaches it only through the host's `tailscale serve` on `svc:liquid-sync`. There is no Funnel.
+- No secret (CouchDB credentials, setup URI) appears in logs, the runbook or commits. The runbook writes the tailnet name as `<tailnet>`.
+- Test against the throwaway vault only, never a real vault. No step may risk data on a client device.
 
 ## Out of scope
-- Tailnet prerequisites: enabling MagicDNS and HTTPS certificates, creating the tag and its ACL. That is 0010, which this item depends on.
+- Tailnet prerequisites: MagicDNS, HTTPS certificates, the `tag:server` tag, advertising `svc:liquid-sync`, and the policy. These belong to homelab ADR 0005 and are tracked by 0010.
+- Deploying the stack to the Pi. That is 0011, which this item depends on.
 - Tightening CORS (0009), the CLI (Phase 2), setup URIs and QR codes, and real vaults.
-- Deploying to the Pi and moving the node identity between hosts (Phase 5).
+- Serving the Mac's local stack over the tailnet.
+- Moving the Service between hosts (Phase 5).
 
 ## Open questions
-- [ ] Does `tailscale serve` in userspace mode proxy to another container by `container_name` on the compose network, or only to localhost? If only localhost, the sidecar may need CouchDB's network namespace (`network_mode: service:`), which ADR 0001 says must first be tested with podlet.
-- [ ] Should the serve config be declarative (`TS_SERVE_CONFIG` JSON committed in `config/`) or set once with `tailscale serve --bg` and kept in the state volume? Declarative fits "no pets".
-- [ ] Does keeping the `127.0.0.1:5984` host port still make sense once HTTPS works (for local scripts like `check-couchdb-config`), or should everything go through the sidecar?
+- [x] Does keeping the `127.0.0.1:5984` host port still make sense once HTTPS works? — Yes. It is what the host's `tailscale serve` forwards to, and local scripts like `check-couchdb-config` use it too.
 
 ## Tier
-high — network exposure and infrastructure: a new tailnet node in front of CouchDB, plus a secret auth key and node state
+high — this is the first time CouchDB is reachable from other devices on the tailnet, even though the homelab repo owns the exposure. The rescope removed the earlier reasons (a new node, an auth key and node state), so standard may be enough.
