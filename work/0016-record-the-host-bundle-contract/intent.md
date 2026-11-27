@@ -53,4 +53,4 @@ small — docs only, three or four files, no code.
 - [x] Add `docs/decisions/0003-host-bundle-contract.md` from `adr-0003-draft.md`.
 - [x] Amend ADR 0001 (dated 2026-11-27, 0016).
 - [x] Update `docs/project-plan.md` (and `README.md` if needed).
-- [ ] Run `sdlc verify`.
+- [x] Run `sdlc verify`.
