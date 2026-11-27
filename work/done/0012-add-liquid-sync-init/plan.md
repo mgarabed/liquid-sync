@@ -16,7 +16,7 @@ from: spec.md
 - `docs/project-plan.md` (edit) — the Phase 2 init line: local only; it generates the env file, starts the stack, waits and checks for drift.
 - `docs/decisions/0003-host-bundle-contract.md` (edit) — dated amendment (2026-11-27, 0012) to the `post-install` bullet. It's optional and not shipped yet; health is 0017's, drift is 0015's, and init is local only.
 - `docs/runbooks/local-sync-test.md` (edit) — "Before you start" uses `./liquid-sync init`.
-- `work/0012-add-liquid-sync-init/plan.md` (edit) — tick steps as they land.
+- `work/done/0012-add-liquid-sync-init/plan.md` (edit) — tick steps as they land.
 
 ## Order of work
 - [x] 1. **Record a baseline for `check-couchdb-config`.** The build runs in `.worktrees/0012`, which has no git-ignored env file. So capture stdout, stderr and exit code from the **main checkout's** copy, by absolute path (`/Users/mike/src/liquid-sync/scripts/check-couchdb-config`):

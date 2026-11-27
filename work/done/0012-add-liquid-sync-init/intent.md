@@ -2,7 +2,7 @@
 id: 0012
 title: Add liquid-sync init
 type: feature
-status: in-review
+status: merged
 risk: low
 tier: standard
 priority: P2
@@ -15,6 +15,8 @@ spec_hash: requirements=a96dbcc7434e;acceptance-criteria=1ebe87a83b00;areas-of-c
 started: 2026-11-27T22:46:05+00:00
 submitted: 2026-11-27T23:08:42+00:00
 submitted_verify: full
+merged: 2026-11-27T23:35:05+00:00
+checks: none
 ---
 # Intent: Add liquid-sync init
 
