@@ -2,9 +2,9 @@
 id: 0012
 title: Add liquid-sync init
 type: feature
-status: draft
+status: accepted
 risk: low
-tier: 
+tier: standard
 priority: P2
 author: Mike Garabedian
 created: 2026-11-26
