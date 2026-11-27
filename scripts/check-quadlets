@@ -36,10 +36,22 @@ EOF
 
 die() { echo "check-quadlets: $*" >&2; exit 1; }
 
+# Joins systemd continuation lines (a trailing backslash continues the line,
+# with a space in its place), so a key split over lines is still seen whole.
+join_continued() {
+  awk '
+    { line = held $0; held = "" }
+    line !~ /^[ \t]*[#;]/ && line ~ /\\[ \t\r]*$/ {
+      sub(/\\[ \t\r]*$/, " ", line); held = line; next
+    }
+    { print line }
+    END { if (held != "") print held }' "$1"
+}
+
 # Prints the values of Key= lines in a unit file, one per line. Keys are
 # matched whole and line-anchored, so comments and longer keys never match.
 unit_values() {
-  awk -v k="$2" '
+  join_continued "$1" | awk -v k="$2" '
     { line = $0; sub(/^[ \t]+/, "", line) }
     line ~ /^[#;]/ { next }
     {
@@ -48,16 +60,31 @@ unit_values() {
       if (key != k) next
       v = substr(line, i + 1); sub(/^[ \t]+/, "", v); sub(/[ \t\r]+$/, "", v)
       print v
-    }' "$1"
+    }'
+}
+
+# The unit type a file configures: its extension, or for a Quadlet drop-in
+# (<unit>.<type>.d/*.conf or <type>.d/*.conf) the extension of its directory.
+unit_kind() {
+  local p
+  case "$1" in
+    *.d/*.conf) p="${1%/*}"; p="${p##*/}"; p="${p%.d}"; echo "${p##*.}" ;;
+    *) p="${1##*/}"; echo "${p##*.}" ;;
+  esac
 }
 
 # Lints a bundle directory against the ADR 0003 layout rules and quadlet
 # promises (0011 R5). Prints one "file: rule" line per violation to stderr and
 # returns 1 if there are any. It checks only what the contract states.
 lint_bundle() {
-  local dir="${1%/}" f rel v name tag n_ports=0
+  local dir="${1%/}" f rel kind v name tag n_ports=0 n_containers=0
   local -a errs=()
   err() { errs+=("$1: $2"); }
+
+  [ -d "$dir" ] && [ -r "$dir" ] || { echo "check-quadlets: lint: '$dir' is not a readable directory" >&2; return 1; }
+  # The loops below read find through process substitution, which hides its
+  # exit status, so an unreadable subdirectory is caught here first.
+  find "$dir" >/dev/null || err "(bundle)" "find failed (unreadable directory?)"
 
   while IFS= read -r -d '' f; do
     err "${f#"$dir/"}" "not a regular file or directory (no symlinks or other file types)"
@@ -73,6 +100,7 @@ lint_bundle() {
 
   while IFS= read -r -d '' f; do
     rel="${f#"$dir/"}"
+    kind="$(unit_kind "$f")"
 
     while IFS= read -r v; do
       n_ports=$((n_ports + 1))
@@ -98,34 +126,38 @@ lint_bundle() {
     while IFS= read -r v; do
       name="${v%%@*}"; name="${name##*/}"
       if [[ "$name" != *:* ]]; then
-        err "$rel" "Image=$v has no tag"
+        err "$rel" "Image=$v has no tag (ADR 0003 pins images to a tag; a digest alone doesn't count)"
       else
         tag="${name##*:}"
         [ "$tag" != latest ] || err "$rel" "Image=$v is tagged latest"
       fi
     done < <(unit_values "$f" Image)
 
-    case "$f" in
-      *.network)
+    case "$kind" in
+      network)
         for v in Driver NetworkInterface Options; do
           [ -z "$(unit_values "$f" "$v")" ] || err "$rel" "$v= not allowed in a .network file (default bridge only)"
         done ;;
-      *.volume)
-        [ -n "$(unit_values "$f" VolumeName)" ] || err "$rel" "missing VolumeName=" ;;
-      *.container)
-        awk '
+      volume)
+        [[ "$f" == *.d/*.conf ]] || [ -n "$(unit_values "$f" VolumeName)" ] \
+          || err "$rel" "missing VolumeName=" ;;
+      container)
+        [[ "$f" != *.d/*.conf ]] || continue
+        n_containers=$((n_containers + 1))
+        join_continued "$f" | awk '
           /^[ \t]*\[/ { sec = $0; gsub(/[ \t\r]/, "", sec); next }
           sec == "[Install]" && /^[ \t]*WantedBy[ \t]*=/ {
             v = $0; sub(/^[^=]*=/, "", v); n = split(v, w, /[ \t\r]+/)
             for (i = 1; i <= n; i++) if (w[i] == "default.target") found = 1
           }
-          END { exit !found }' "$f" \
+          END { exit !found }' \
           || err "$rel" "missing WantedBy=default.target under [Install]" ;;
     esac
   done < <(find "$dir" -type f \( -name '*.container' -o -name '*.network' \
-    -o -name '*.volume' -o -name '*.pod' \) -print0 | sort -z)
+    -o -name '*.volume' -o -name '*.pod' -o -path '*.d/*.conf' \) -print0 | sort -z)
 
   [ "$n_ports" -le 1 ] || err "(bundle)" "$n_ports PublishPort= lines (only one allowed)"
+  [ "$n_containers" -gt 0 ] || err "(bundle)" "no .container unit"
 
   [ "${#errs[@]}" -eq 0 ] && return 0
   printf 'check-quadlets: lint: %s\n' "${errs[@]}" >&2
@@ -147,6 +179,7 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
+[ -z "$lint_only" ] || [ "$write" -eq 0 ] || die "--lint-only can't be combined with --write"
 
 # Runs before the Podman check: linting needs no Podman.
 if [ -n "$lint_only" ]; then
@@ -176,10 +209,12 @@ committed="$root/deploy/quadlets"
 
 failed=()
 
-# The lint's own tests need no Podman, so they run (and can fail the check)
-# even when the Podman part is skipped below. Never from --lint-only, which
-# the tests call: that would recurse.
-"$root/scripts/test-check-quadlets" || failed+=(lint-tests)
+# The lint's own tests need no Podman, so in check mode they run (and can fail
+# the check) even when the Podman part is skipped below. They copy the
+# committed bundle, so --write runs them after it has rewritten it instead.
+# Never from --lint-only, which the tests call: that would recurse.
+run_lint_tests() { "$root/scripts/test-check-quadlets" || failed+=(lint-tests); }
+[ "$write" -eq 1 ] || run_lint_tests
 
 # Runs before any staging, so a skip creates nothing.
 if reason="$(podman_unavailable_reason)"; then
@@ -226,6 +261,8 @@ assert_committed() {
       continue
     elif [ -f "$path" ]; then
       case "$rel" in
+        # Finder metadata; harmless, and removed with the directory.
+        .DS_Store|config/.DS_Store) continue ;;
         */*/*) ;;
         config/*.ini) continue ;;
         */*) ;;
@@ -268,6 +305,7 @@ if [ "$write" -eq 1 ]; then
   find "$committed" -type f | sort | while IFS= read -r f; do
     echo "check-quadlets: wrote ${f#"$root/"}"
   done
+  run_lint_tests
 elif ! diff -r "$tmp/src/out" "$committed" >&2; then
   echo "check-quadlets: deploy/quadlets/ differs from podlet output; run scripts/check-quadlets --write and review the diff" >&2
   failed+=(diff)
