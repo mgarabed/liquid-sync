@@ -23,8 +23,12 @@ no manifest, no installer, and nothing that needs root.
 
 - `deploy/quadlets/`: the podlet-generated quadlets plus every config file
   they mount.
-  - Only `.container`, `.volume`, `.network` and `.pod` files, needing
-    nothing newer than Podman 5.0.
+  - Unit files are only `.container`, `.volume`, `.network` and `.pod`,
+    needing nothing newer than Podman 5.0.
+  - Any other regular file is allowed and installed alongside them: config
+    the units mount (such as `config/*.ini`), `*.env.example`, and hook
+    helpers. None of them may use a unit extension, or Quadlet would treat
+    it as a unit.
   - Regular files only: no symlinks and no submodules.
   - The host tool installs the directory exactly as committed into the
     service user's `~/.config/containers/systemd/`, and removes files a

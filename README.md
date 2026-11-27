@@ -78,7 +78,7 @@ compose.yaml             # CouchDB + archiver, docker or podman
 config/                  # CouchDB *.ini (copied into local.d/), LiveSync presets
 archiver/                # CouchDB → files → git service
 deploy/quadlets/         # quadlet units generated from compose.yaml (Fedora IoT)
-deploy/hooks/            # post-install, backup, restore hooks the host tool runs
+deploy/hooks/            # optional post-install, backup, restore hooks the host tool runs (planned)
 docs/                    # plan, runbooks, decision records
 ```
 

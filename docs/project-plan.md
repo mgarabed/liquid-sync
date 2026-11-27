@@ -130,8 +130,9 @@ The archive repo is the exit path: a plain Markdown vault plus full history.
   Moving hosts means the homelab repo has the new host advertise the Service
   and the old one stop (homelab ADR 0005).
 - Procedure: `backup` on the old host → the host tool installs the bundle
-  on the new host (ADR 0003) → `restore` → take the old host offline → `doctor`. Clients
-  reconnect with no changes.
+  on the new host ([ADR 0003](decisions/0003-host-bundle-contract.md)) →
+  `restore` → take the old host offline → `doctor`. Clients reconnect with
+  no changes.
 - Alternative with no downtime: CouchDB replication from the old host to the
   new one, then cut the hostname over.
 - Also a migration: **LiveSync plugin and CouchDB upgrades.** Pin versions,
