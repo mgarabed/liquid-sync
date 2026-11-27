@@ -2,7 +2,7 @@
 id: 0012
 title: Add liquid-sync init
 type: feature
-status: accepted
+status: planned
 risk: low
 tier: standard
 priority: P2
@@ -11,6 +11,7 @@ created: 2026-11-26
 branch: 
 pr: 
 depends: 0011, 0016
+spec_hash: requirements=a96dbcc7434e;acceptance-criteria=1ebe87a83b00;areas-of-concern=075a41132a33
 ---
 # Intent: Add liquid-sync init
 
