@@ -21,7 +21,7 @@ from: spec.md
 - `work/0011-deploy-the-stack-to-a-fedora-iot-host/plan.md` (edit) — tick steps as they land.
 
 ## Order of work
-- [ ] 1. **Bundle copies.**
+- [x] 1. **Bundle copies.**
   - In `check-quadlets`, after podlet runs, add `cp -R "$tmp/src/config" "$tmp/src/out/config"` and `cp "$root/couchdb.env.example" "$tmp/src/out/couchdb.env.example"`. Don't copy the staged `couchdb.env`: that's the same file under the real name, and it must not land in the bundle.
   - Widen `assert_committed`. It accepts unit files at the top level, `couchdb.env.example` at the top level, and `config/*.ini`. Anything else, or any non-regular file, still refuses the delete.
   - Make both copies recursive. The `--write` copy becomes `cp -R "$tmp/src/out/." "$committed/"`. Today's `cp "$tmp/src/out/"*` would fail on `out/config/` under `set -e` after the `rm -rf` had already run, leaving the bundle deleted. The dry-run staging becomes `cp -R "$committed/." "$tmp/q/"`.

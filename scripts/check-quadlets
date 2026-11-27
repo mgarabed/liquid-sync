@@ -86,18 +86,31 @@ assert_tmp() {
 }
 
 # deploy/quadlets/ is removed only when it is this repo's quadlet directory (next
-# to compose.yaml and this script) and holds nothing but quadlet unit files.
+# to compose.yaml and this script) and holds nothing but what --write itself
+# produces: top-level unit files and couchdb.env.example, and config/*.ini.
 assert_committed() {
   [[ "$root" == /?* ]] && [ "$committed" = "$root/deploy/quadlets" ] \
     && [ -f "$root/compose.yaml" ] && [ -f "$root/scripts/check-quadlets" ] \
     || die "refusing to remove '$committed': not <repo>/deploy/quadlets"
   [ ! -L "$committed" ] || die "refusing to remove '$committed': it is a symlink"
   [ -d "$committed" ] || return 0
-  local stray
-  stray="$(find "$committed" -mindepth 1 \( ! -type f -o ! \( -name '*.container' \
-    -o -name '*.network' -o -name '*.volume' -o -name '*.pod' \) \) -print -quit)"
-  [ -z "$stray" ] \
-    || die "refusing to remove '$committed': it holds '${stray#"$committed/"}', which isn't a quadlet unit file"
+  local path rel
+  while IFS= read -r -d '' path; do
+    rel="${path#"$committed/"}"
+    if [ -L "$path" ]; then
+      die "refusing to remove '$committed': '$rel' is a symlink"
+    elif [ -d "$path" ] && [ "$rel" = config ]; then
+      continue
+    elif [ -f "$path" ]; then
+      case "$rel" in
+        */*/*) ;;
+        config/*.ini) continue ;;
+        */*) ;;
+        couchdb.env.example|*.container|*.network|*.volume|*.pod) continue ;;
+      esac
+    fi
+    die "refusing to remove '$committed': it holds '$rel', which --write doesn't produce"
+  done < <(find "$committed" -mindepth 1 -print0)
 }
 
 assert_tmp
@@ -119,14 +132,21 @@ if ! "$PODMAN" run --rm -v "$tmp/src:/w:Z" -w /w "$PODLET_IMAGE" \
   die "podlet failed to convert compose.yaml"
 fi
 
+# The bundle also carries copies of its sources of truth (ADR 0003 layout). The
+# example is copied by its own name; the staged couchdb.env never enters out/.
+cp -R "$tmp/src/config" "$tmp/src/out/config"
+cp "$root/couchdb.env.example" "$tmp/src/out/couchdb.env.example"
+
 failed=()
 
 if [ "$write" -eq 1 ]; then
   assert_committed
   rm -rf "$committed"
   mkdir -p "$committed"
-  cp "$tmp/src/out/"* "$committed/"
-  for f in "$committed"/*; do echo "check-quadlets: wrote ${f#"$root/"}"; done
+  cp -R "$tmp/src/out/." "$committed/"
+  find "$committed" -type f | sort | while IFS= read -r f; do
+    echo "check-quadlets: wrote ${f#"$root/"}"
+  done
 elif ! diff -r "$tmp/src/out" "$committed" >&2; then
   echo "check-quadlets: deploy/quadlets/ differs from podlet output; run scripts/check-quadlets --write and review the diff" >&2
   failed+=(diff)
@@ -134,7 +154,7 @@ fi
 
 # The dry-run runs even after a diff failure, so both problems are reported.
 mkdir -p "$tmp/q"
-cp "$committed/"* "$tmp/q/"
+cp -R "$committed/." "$tmp/q/"
 if ! "$PODMAN" run --rm -v "$tmp/q:/q:Z" -e QUADLET_UNIT_DIRS=/q "$PODMAN_IMAGE" \
     /usr/libexec/podman/quadlet -dryrun -user >"$tmp/dryrun.log" 2>&1; then
   # Show the generator's errors; fall back to the whole log if there are none.
