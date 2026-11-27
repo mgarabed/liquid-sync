@@ -63,8 +63,8 @@ from: spec.md
 
   Record both init transcripts in the PR, which contain no secrets by R5. The worktree's env file is deleted along with the worktree.
 
-  *As built:* no stack was running and the main checkout has no env file (see step 1), so nothing was taken over, and the normal-run and 401 baselines came from `main`'s copy in `/tmp/0012-baseline/tree/`. The restore is `podman compose down` (no `-v`) from the worktree, which returns to the state before step 6. It runs in step 7, after the verifier, which may need the stack up.
-- [ ] 7. **Close out.** Run `sdlc verify` (full) and paste the summary line. Run `bash test/liquid-sync-init.sh` and paste its output in the PR, since verify doesn't run it until 0018. Then run the `sdlc:verifier` agent and submit.
+  *As built:* no stack was running and the main checkout has no env file (see step 1), so nothing was taken over, and the normal-run and 401 baselines came from `main`'s copy in `/tmp/0012-baseline/tree/`. The restore is `podman compose down` (no `-v`) from the worktree. It runs in step 7, after the verifier, which may need the stack up. That stops and removes the container and network. The `liquid-sync_couchdb-data` volume that step 6 created stays, since nothing here deletes data. The user accepted this departure from 0012 AC6's restore clause on 2026-11-27, and spec.md is unchanged.
+- [x] 7. **Close out.** Run `sdlc verify` (full) and paste the summary line. Run `bash test/liquid-sync-init.sh` and paste its output in the PR, since verify doesn't run it until 0018. Then run the `sdlc:verifier` agent and submit.
 
 ## Risks
 - **The riskiest step is 2,** moving `check-couchdb-config` onto the lib. It's the only script that handles the admin password today, and 0011's AC9 and the runbook use it. A subtle change (quoting in `env_value`, curl's stdin, the `die` prefix) could break it, or leak the password into argv. Mitigations:
