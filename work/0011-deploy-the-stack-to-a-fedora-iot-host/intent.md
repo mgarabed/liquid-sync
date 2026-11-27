@@ -2,9 +2,9 @@
 id: 0011
 title: Deploy the stack to a Fedora IoT host
 type: feature
-status: draft
+status: accepted
 risk: low
-tier: 
+tier: standard
 priority: P2
 author: Mike Garabedian
 created: 2026-11-25
