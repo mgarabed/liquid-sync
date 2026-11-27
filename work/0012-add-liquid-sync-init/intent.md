@@ -17,40 +17,52 @@ depends: 0011, 0016
 ## Problem
 Phase 2: ./liquid-sync init generates the per-service *.env files from their examples, starts the stack, applies CouchDB config idempotently, and waits for health; bash, set -euo pipefail, shellcheck, --help, --dry-run.
 
-Rescoped 2026-11-27 for the host bundle contract (`docs/decisions/0003-host-bundle-contract.md`). On a host, the host tool writes `couchdb.env` and starts the units. It then runs `deploy/hooks/post-install` on every apply, as the service user, from the installed quadlet directory. So init has two callers. On a host, init is (or is called by) post-install: it waits for health, then applies the CouchDB config and any migration. Locally, `./liquid-sync init` also generates the env files from their examples and starts the stack.
+Rescoped 2026-11-27 (twice), for the host bundle contract (ADR 0003), 0011 and 0017. Most of the original job is now done elsewhere:
+- **CouchDB config:** declared in `config/*.ini`, loaded when the container starts (0003) and shipped in the bundle (0011). Nothing is left to apply through the HTTP API.
+- **On a host:** the host tool writes `couchdb.env` and starts the units. 0017's health check, with `Notify=healthy`, covers health, and 0015's `doctor` covers config drift.
+- **Upstream:** the LiveSync CLI is a vault sync client with no server-admin commands, and upstream's `couchdb-init.sh` only applies config through the API. So neither replaces anything here.
 
-Refined 2026-11-27 after 0011's spec: on both paths, init has no CouchDB config left to apply. All of it is declared in `config/*.ini`, which the container copies into `local.d/` at start (0003). Single-node setup creates the system databases (`10-single-node.ini`), and the admin comes from `couchdb.env`. 0011 ships copies of those files in the bundle. So on a host, post-install only waits for health, checks the running config for drift against the shipped `.ini` files (as `scripts/check-couchdb-config` does), and provides a place for future migrations. It doesn't write config through the HTTP API, which would put values in `local.d/docker.ini` instead of the repo.
+Two things are still missing. There's no `./liquid-sync` entry point, though README already lists `./liquid-sync init`, and 0013–0015 all add subcommands to it. And setting up a local stack means copying the env example by hand, which leaves its fake admin password in place.
 
 ## Proposed outcome
-- `./liquid-sync init` on the dev Mac generates any missing `*.env` file from its example, starts the stack, waits for CouchDB to be healthy, and fails if the running config drifts from `config/*.ini`. A second run changes nothing.
-- `deploy/hooks/post-install`, run by the host tool after the units are running, waits for health, runs the same drift check against the bundle's `config/*.ini`, then runs any migration (none yet). It is non-interactive, idempotent, and exits non-zero on failure.
-- On any host, an existing `couchdb.env` is never created, overwritten or printed. Generating env files from their examples is a local-dev path only.
-- `--help` on every path, and `--dry-run` shows what would change without changing it.
+- A `./liquid-sync` CLI at the repo root:
+  - subcommand dispatch, with `--help` for the tool and for each subcommand;
+  - a shared `--dry-run`;
+  - shared helpers that 0013–0015 reuse: reading credentials from an env file without sourcing it, authenticated calls to CouchDB with credentials kept out of argv, waiting for health, and errors without secrets.
+- `./liquid-sync init`, for local development only:
+  - If `couchdb.env` is missing, create it from `couchdb.env.example` with mode 0600. It keeps the example's username and replaces the password with a strong random one. The password is never printed.
+  - If `couchdb.env` exists, leave it untouched and don't print it.
+  - Start the stack with `podman compose up -d`, wait for an authenticated `_up`, and run the config drift check (`scripts/check-couchdb-config`).
+  - A second run changes nothing and reports that everything is already in place.
+  - `--dry-run` says which of these it would do, without doing any of them.
+- README's commands section matches what exists, and `docs/project-plan.md`'s Phase 2 line no longer says init applies config through the HTTP API.
 
 ## Affected users and systems
-- New: the `./liquid-sync` CLI script at the repo root, and `deploy/hooks/post-install`.
-- Helper files the hook needs, in `deploy/quadlets/`, because the hook's working directory is the installed quadlet directory and the repo isn't on the host.
-- `couchdb.env.example`, `config/*.ini` and their bundle copies under `deploy/quadlets/` (0011), and `scripts/check-couchdb-config`, whose drift check the hook needs on a host where the repo isn't present.
-- `scripts/check-quadlets`: 0011's lint and `--write` guard allow only the bundle's current files, so any helper 0012 adds to `deploy/quadlets/` must extend both.
-- CouchDB on the dev Mac and on the production Pi.
+- New: `./liquid-sync`, and any helper library it sources, plus its tests.
+- `couchdb.env.example` (read), the git-ignored `couchdb.env` (created only when missing), `compose.yaml` (run, not changed) and `scripts/check-couchdb-config` (called).
+- `README.md`, and `docs/runbooks/local-sync-test.md` if it can start with `./liquid-sync init` instead of hand steps.
+- The local stack on the dev Mac (Podman machine). Nothing on the production host.
 
 ## Constraints
-- bash with `set -euo pipefail`, passes `shellcheck`, idempotent, `--help`, `--dry-run` for anything that changes data.
-- Hooks only read env files. Every secret, including the CouchDB admin password, comes from an env file the host supplies. Secrets are never printed or logged.
-- The hook gets `STACK_NAME` and `STACK_URL` in its environment, and a working user session for `podman` and `systemctl --user`. It must not assume the repo, compose or the `./liquid-sync` script exist on the host.
-- Nothing needs root. CouchDB is reached only on `127.0.0.1:5984`.
-- Test against a throwaway vault in `test/fixtures/` only.
+- bash with `set -euo pipefail`, passes `shellcheck`, idempotent, `--help` on every subcommand, `--dry-run` for anything that changes data (CLAUDE.md).
+- Secrets: the generated password and the contents of `couchdb.env` never reach stdout, stderr, logs, argv or the repo. An existing `couchdb.env` is never overwritten, recreated or printed.
+- The password comes from standard tools reading `/dev/urandom`. No new dependency.
+- Local development uses `podman` commands, never `docker`, and leaves the Colima setup alone (ADR 0001).
+- CouchDB is reached only on `127.0.0.1:5984`.
+- Test against a throwaway vault in `test/fixtures/` only, and never against a real `couchdb.env`. Tests use a temp directory.
 
 ## Out of scope
-- `vault add/list/remove` (0013), `setup-uri` (0014) and `doctor` (0015).
-- `deploy/hooks/backup` and `deploy/hooks/restore` (Phase 5).
-- Shipping the bundle layout and its checks (0011).
-- Tightening CORS (0009).
+- `deploy/hooks/post-install`. The contract makes it optional, and today it would only repeat 0017's health check and 0015's drift check. Add it when there's a real migration.
+- Any host path or host detection: init is local only.
+- `vault add/list/remove` (0013), `setup-uri` (0014) and `doctor` (0015), apart from the shared helpers they'll use.
+- Rotating an existing admin password.
 
 ## Open questions
-- [ ] Is post-install a thin wrapper around a shared init script shipped in `deploy/quadlets/`, with `./liquid-sync init` adding the local-only steps around it? Or is it a separate script that shares a library?
-- [ ] How does init tell the local-dev path from the host path: a flag, the `STACK_NAME` env var, or the hook entry point alone?
-- [ ] What counts as a migration at this point? There's nothing to migrate yet, so is a migration hook point enough for now?
+- [x] Is post-install a thin wrapper around a shared init script, or a separate script? — Neither: there's no post-install hook in this item (Out of scope).
+- [x] How does init tell the local path from the host path? — It doesn't need to: init is local only.
+- [x] What counts as a migration? — None exist. A hook point waits for the first real migration.
+- [x] What admin username does a generated `couchdb.env` get? — The example's username; only the password is generated.
+- [ ] One script file, or `./liquid-sync` plus a sourced `lib/` of helpers that later subcommands share? Decide in the spec.
 
 ## Tier
-full — a new CLI and a hook that run on the production host with the CouchDB admin secret; review the spec before planning.
+standard — one feature, local only: a new CLI script, its tests and docs, with no deploy or control files.
