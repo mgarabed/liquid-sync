@@ -10,7 +10,7 @@ author: Mike Garabedian
 created: 2026-11-26
 branch: 
 pr: 
-depends: 0016
+depends: 0011, 0016
 ---
 # Intent: Add liquid-sync init
 
