@@ -19,15 +19,21 @@ from: spec.md
 - `work/0012-add-liquid-sync-init/plan.md` (edit) — tick steps as they land.
 
 ## Order of work
-- [ ] 1. **Record a baseline for `check-couchdb-config`.** With the local stack up, capture its stdout, stderr and exit code for: a normal run, `--help`, and an unknown argument. Save them under `/tmp/0012-baseline/` for 0012 AC8. If the stack isn't up, ask the user to start it. Nothing is committed in this step.
+- [ ] 1. **Record a baseline for `check-couchdb-config`.** The build runs in `.worktrees/0012`, which has no git-ignored env file. So capture stdout, stderr and exit code from the **main checkout's** copy, by absolute path (`/Users/mike/src/liquid-sync/scripts/check-couchdb-config`):
+  - a normal run against the local stack (it reads its own env file, and its output has no secrets);
+  - `--help`;
+  - an unknown argument;
+  - fake `COUCHDB_USER=x COUCHDB_PASSWORD=y`, which expects the 401 message.
+
+  Save them under `/tmp/0012-baseline/` for 0012 AC8. If the stack isn't up, ask the user to start it from the main checkout. Nothing is committed in this step.
 - [ ] 2. **`lib/common.sh`, and move `check-couchdb-config` onto it.**
   - Move `die`, `env_value`, `escape` and `curl_auth` as they are into the lib. `env_value` takes the file as its first argument, and `curl_auth_line USER PASS` returns the line.
   - Add `couch_get URL PATH [curl args]`, which sends credentials on curl's stdin (`--config -`), with `--max-time 10`.
   - Add `podman_bin`, which echoes `$PODMAN`, else `podman` on `PATH`, else `/opt/podman/bin/podman`.
-  - Add `wait_for_couch URL TIMEOUT`, which polls `/_up` every 2 s and returns 1 on timeout.
-  - The lib sets nothing at source time apart from functions, and starts with a guard against being executed directly.
+  - Add `wait_for_couch URL TIMEOUT`, which polls `/_up` every 2 s and returns 1 on timeout. On 401 or 403 it fails at once with "CouchDB refused the admin credentials", so a container still running on an older password doesn't look like a 60 s timeout.
+  - The lib sets nothing at source time apart from functions, and starts with a guard against being executed directly. Callers source it with a `# shellcheck source=lib/common.sh` directive above the `source "$root/lib/common.sh"` line, because `shellcheck -x` can't follow a non-constant path.
   - In `check-couchdb-config`, keep the prefix `check-couchdb-config:` on its `die` messages by setting `PROG` before sourcing.
-  - Re-run the three baseline cases and `diff` them against step 1's output; they must be identical. Run `sdlc verify --fast`.
+  - Re-run `--help`, the unknown argument and the fake-credentials case with the worktree's copy, and `diff` them against step 1's output; they must be identical. The fake-credentials case exercises the moved curl path early. The normal run is compared in step 6, once init has the stack up. Run `sdlc verify --fast`.
 - [ ] 3. **Write the tests first:** `test/liquid-sync-init.sh`.
   - Use `mktemp -d` under `/tmp`, guarded like `check-quadlets`' `assert_tmp`. Copy `liquid-sync`, `lib/` and `scripts/check-couchdb-config` in, plus a fake `couchdb.env.example` (`COUCHDB_USER=admin`, `COUCHDB_PASSWORD=`, one comment line).
   - Add a stub `PODMAN`: a script that appends its argv to `calls.log` and exits 0.
@@ -46,12 +52,14 @@ from: spec.md
   - Then the compose up, the wait and the drift check.
   - Run `bash test/liquid-sync-init.sh` until it's green, then run `sdlc verify --fast`.
 - [ ] 5. **Docs:** the README, the project plan, the ADR 0003 amendment and the runbook, as listed above.
-- [ ] 6. **Manual run (0012 AC6).** The secrets guard blocks any command line that names the real env file, so the **user** moves it aside and back. Ask them to run each of these from the prompt, as its own block:
-  - `!mv couchdb.env couchdb.env.pre-0012`
-  - then the agent runs `./liquid-sync init` twice and `git status --short`;
-  - then `!podman compose down && mv couchdb.env.pre-0012 couchdb.env && podman compose up -d`, so the stack is back on the original credentials.
+- [ ] 6. **Manual run (0012 AC6), in the worktree.** The worktree has no env file, which is exactly the first-run case, so nothing needs moving.
+  - Tell the user first: this briefly takes over the local dev stack. Compose recreates the `liquid-sync-couchdb` container on the worktree's new password and `config/` mount. The data volume stays.
+  - Run `./liquid-sync init` twice, then `git status --short`.
+  - For 0012 AC8, run the worktree's `scripts/check-couchdb-config` (now reading the worktree's new env file) and `diff` it against step 1's normal-run baseline. Only `N settings match` lines are compared, and they hold no secrets.
+  - Restore: from the main checkout, run `podman compose up -d` (it recreates the container on the main env file and mount), then the main checkout's `scripts/check-couchdb-config`.
+  - No `-v` anywhere: the admin is written to `local.d/docker.ini` from the env file when the container is created, not stored in the data volume.
 
-  Neither command needs `-v`: the admin is written to `local.d/docker.ini` from the env file at each start, not stored in the data volume. Record both init transcripts in the PR, which contain no secrets by R5.
+  Record both init transcripts in the PR, which contain no secrets by R5. The worktree's env file is deleted along with the worktree.
 - [ ] 7. **Close out.** Run `sdlc verify` (full) and paste the summary line. Run `bash test/liquid-sync-init.sh` and paste its output in the PR, since verify doesn't run it until 0018. Then run the `sdlc:verifier` agent and submit.
 
 ## Risks
@@ -59,7 +67,8 @@ from: spec.md
   - the step 1 baseline diff;
   - moving the functions verbatim;
   - a code read that every curl call still uses `--config -`.
-- **The secrets guard blocks the agent on the real env file.** The tests use a temp copy with fake values, and the manual run hands the move to the user (step 6). The build must never `cat`, `grep` or source `couchdb.env`.
+- **The secrets guard blocks the agent on the real env file.** The tests use a temp copy with fake values, and the manual run uses the worktree's own fresh file, read only by the scripts. The build must never `cat`, `grep` or source `couchdb.env` itself.
+- **Step 6 takes over the local stack.** If the restore is skipped, the dev stack runs on the worktree's password, and the worktree's env file disappears with the worktree. The restore is a numbered sub-step, and step 7's close-out checks the main checkout's `check-couchdb-config` passes.
 - **The password pipeline under `pipefail`.** `head -c 48 /dev/urandom | base64 | tr -dc … | cut -c1-32` has finite stages, so nothing gets SIGPIPE. Asserting a 32-character result catches a short read. Avoid `tr … </dev/urandom | head`: it gets SIGPIPE, and `pipefail` turns that into a failure.
 - **`stat` differs between macOS and Linux.** Handled with a fallback, and the test checks the mode on the Mac where it runs.
 - **macOS bash 3.2.** `/usr/bin/env bash` may be 3.2 on the Mac. Avoid `mapfile`, `${var,,}`, associative arrays and process substitution that feeds curl (the runbook notes 3.2 closes it early).
@@ -77,7 +86,7 @@ from: spec.md
 ## Proof
 - AC1–AC5, AC7: `bash test/liquid-sync-init.sh` prints `ok` for each case and exits 0.
 - AC6: step 6's transcripts in the PR. The first run shows `couchdb.env created (mode 0600)`, `check-couchdb-config: N settings match` and `init: done`. The second shows every step already in place. `git status --short` is empty.
-- AC8: `diff` of the step 1 baseline against the post-change output, for all three cases. The diff is empty.
+- AC8: `diff` of the step 1 baselines against the worktree copy's output: `--help`, the unknown argument and fake credentials in step 2, and the normal run in step 6. Every diff is empty.
 - AC9: `sdlc verify` ends with `verify: PASS`, and the shellcheck step lists `liquid-sync`, `lib/common.sh` and `test/liquid-sync-init.sh` among the checked files (`git ls-files` after `git add`).
 - AC10: a code read of the README, project-plan, ADR 0003 and runbook diffs.
 - Finally `sdlc verify`, which must end with `verify: PASS`.

@@ -37,11 +37,11 @@ Prior items:
 - R9. A second `init` on a working stack changes no file, reports each step as already in place, and exits 0.
 - R10. `--dry-run` prints each step init would take, such as "would create couchdb.env", and exits 0.
 - R11. `scripts/check-couchdb-config` behaves exactly as before: same arguments, output lines and exit codes. It now uses the shared helpers.
-- R12. Every new or changed script is bash with `set -euo pipefail` and passes the existing shellcheck verify step.
+- R12. Every new or changed executable script is bash with `set -euo pipefail`. The sourced `lib/common.sh` sets no shell options of its own, and leaves that to its callers. All of them pass the existing shellcheck verify step.
 - R13. Docs:
   - README's "Planned CLI" section marks `init` as available and describes what it does;
   - `docs/project-plan.md`'s Phase 2 init line matches this spec;
-  - ADR 0003's `post-install` bullet no longer says it's init (dated amendment, 0012);
+  - ADR 0003's `post-install` bullet and its Consequences bullet "init splits into two paths (0012)" no longer say init is the hook (dated amendment, 0012);
   - `docs/runbooks/local-sync-test.md`'s "Before you start" uses `./liquid-sync init`.
 
 ## Design
@@ -81,9 +81,9 @@ Prior items:
 - AC3 (R4): in the test, a pre-existing env file with a canary password keeps its checksum, mode and mtime across `init`, and the canary isn't in the output. A 0644 file gets a warning and stays 0644.
 - AC4 (R3): two runs on a fresh copy give two different passwords. With the `ln` target pre-created, the temp file is cleaned up.
 - AC5 (R2, R10): `init --dry-run` with no env file prints "would create" and leaves no env file or temp file, and the stub `PODMAN` logs no call.
-- AC6 (R6–R9, manual, PR transcript): on the dev Mac, with `couchdb.env` moved aside, the first `./liquid-sync init` creates it, brings the stack up and prints `check-couchdb-config: N settings match` and `init: done`. A second run reports every step as already in place, and `git status --short` is clean. Put `couchdb.env` back afterwards.
+- AC6 (R6–R9, manual, PR transcript): on the dev Mac, in the build worktree (which has no env file), the first `./liquid-sync init` creates it, brings the stack up and prints `check-couchdb-config: N settings match` and `init: done`. A second run reports every step as already in place, and `git status --short` is clean. Afterwards, the main checkout's stack is restored with `podman compose up -d` and passes `scripts/check-couchdb-config`.
 - AC7 (R7): in the test, a `COUCHDB_URL` pointing at a closed port with `LIQUID_SYNC_TIMEOUT=3` exits 1 in about 3 s, with a message naming the URL and no credentials.
-- AC8 (R11): before and after the change, against the running local stack, `scripts/check-couchdb-config` gives identical output and exit code, plus `--help` and an unknown argument (exit 1).
+- AC8 (R11): the main checkout's `scripts/check-couchdb-config` (the baseline) and the changed one give identical output and exit codes for four cases: a normal run against the local stack, `--help`, an unknown argument (exit 1), and fake credentials (the 401 message).
 - AC9 (R12): `sdlc verify` ends with `verify: PASS`, and shellcheck covers `liquid-sync`, `lib/common.sh` (through `-x`) and the test.
 - AC10 (R13): a code read of the four doc changes.
 
