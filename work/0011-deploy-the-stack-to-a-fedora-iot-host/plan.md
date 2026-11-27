@@ -11,9 +11,9 @@ from: spec.md
   - Build the bundle in the staged `out/`: podlet output, plus `config/` and `couchdb.env.example`.
   - Widen `assert_committed` to the bundle's own file set.
   - Add the contract lint (0011 R5) and a `--lint-only <dir>` mode for the tests. That mode needs no Podman.
+  - Have the normal run (check and `--write`) call `scripts/test-check-quadlets` first, so the lint's negative tests run on every `sdlc verify` through the existing `quadlets` step, with no edit to `.sdlc/config.toml`.
   - Use `cp -R` for the dry-run copy.
 - `scripts/test-check-quadlets` (new) — negative tests for each lint rule, plus a pass on the committed bundle (0011 AC4). bash, no Podman needed.
-- `.sdlc/config.toml` (edit) — add a `quadlet-lint-tests` verify step that runs `scripts/test-check-quadlets`. This is a control file, so the edit asks for approval.
 - `deploy/quadlets/config/10-single-node.ini`, `deploy/quadlets/config/20-livesync.ini`, `deploy/quadlets/couchdb.env.example` (new) — the copies, written only by `scripts/check-quadlets --write`.
 - `README.md` (edit) — the layout block: `deploy/quadlets/` holds the units plus synced copies of `config/` and the env example.
 - `docs/decisions/0001-container-runtime-and-deployment.md` (edit) — dated amendment (2026-11-27, 0011) to the relative-paths compose rule: the bundle carries copies, and `check-quadlets` keeps them in sync.
@@ -38,7 +38,8 @@ from: spec.md
 - [ ] 3. **Lint tests.** `scripts/test-check-quadlets` copies `deploy/quadlets/` into a `mktemp -d` under `/tmp` (guarded like `assert_tmp`).
   - For each rule it applies one mutation, runs `scripts/check-quadlets --lint-only`, and asserts exit 1 plus the rule's message.
   - It also checks that the unmutated copy passes.
-  - Add the verify step to `.sdlc/config.toml`. This needs the user's approval.
+  - Wire it into `check-quadlets`. Before the Podman availability check, the normal run (check mode and `--write`, never `--lint-only`, which would recurse) runs `"$root/scripts/test-check-quadlets"`. A failure adds `lint-tests` to the failures and fails the run, even when Podman is missing: the 0008 R3/R4 skip covers only Podman being unavailable, and these tests don't need Podman. On a SKIPPED run, the SKIPPED line still prints and the lint tests' own `ok` lines show that they ran.
+  - `.sdlc/config.toml` doesn't change: control-file edits need the high tier, and 0011 is standard (owner decision, 2026-11-27).
 - [ ] 4. **Floor dry-run, once (0011 R6).** Pin `quay.io/podman/stable:v5.5` by digest for the record, using `podman manifest inspect` or `skopeo inspect` for the index digest. Run `quadlet -dryrun -user` on the committed bundle (expect exit 0 and no `unsupported key`), then on `v5.4` (expect `unsupported key 'Memory'`). Save both outputs for the PR and for ADR 0003. Nothing is committed in this step apart from ticking it.
 - [ ] 5. **Docs.**
   - Amend ADR 0003's floor to 5.5, adding the step 4 evidence and the date. Say that the host side agreed, or that the change is pending its agreement, whichever is true at the time.
@@ -68,6 +69,7 @@ from: spec.md
 - **Lint false positives** once real files grow comments or new keys. Line-anchored keys and the tests keep it honest. The lint checks only what the contract states and nothing stricter.
 - **The floor change needs the host side's agreement.** If the host side says no before merge, the fallback is to drop `mem_limit:` and amend ADR 0001's budget. That would be a spec change, back to the owner.
 - **Rejected:**
+  - A separate verify step for the lint tests in `.sdlc/config.toml`: a control-file edit forces the high tier, and running the tests from `check-quadlets` gives the same coverage (owner decision).
   - Moving `config/` into the bundle and rewriting podlet's paths: it post-processes podlet output and ties the config to quadlets (intent decision).
   - A standing 5.5 dry-run in verify: the owner chose a one-time check (spec decision).
   - Folding the lint tests into `check-quadlets` itself: separate tests keep the script's normal run short and the negative cases readable.
@@ -80,7 +82,7 @@ from: spec.md
 - AC1: `scripts/check-quadlets --write && find deploy/quadlets -type f | sort` lists exactly the five files, and `git status --short` shows only those.
 - AC2: `diff -r config deploy/quadlets/config && cmp couchdb.env.example deploy/quadlets/couchdb.env.example && git diff --quiet main -- compose.yaml` exits 0. `compose.yaml` doesn't change, so local compose behaves as before. (`podman compose config` needs the git-ignored env file, which a build worktree doesn't have.)
 - AC3: in `git worktree add /tmp/q11 HEAD`, apply each of the three mutations, run `scripts/check-quadlets`, and expect exit 1 with the path in the diff output. Remove the worktree afterwards.
-- AC4: `scripts/test-check-quadlets` exits 0 and prints one `ok` per rule plus the clean pass.
+- AC4: `scripts/test-check-quadlets` exits 0 and prints one `ok` per rule plus the clean pass. `sdlc verify` output shows those `ok` lines under the `quadlets` step. With Podman unreachable (`PODMAN=/nonexistent`), `scripts/check-quadlets --skip-if-no-podman` still runs them before printing SKIPPED. Breaking one test, by editing a rule's expected message in a scratch copy, makes that same command exit 1.
 - AC5: the two dry-run outputs from step 4, in the PR.
 - AC6 and AC7: `sdlc verify` ends with `verify: PASS`. `PODMAN=/nonexistent scripts/check-quadlets --skip-if-no-podman` exits 0 with `SKIPPED`. In the AC3 worktree, adding `PodmanArgs=--privileged` to `deploy/quadlets/couchdb.container` and running `scripts/check-quadlets --skip-if-no-podman` with Podman reachable exits 1 and names the lint rule (d) failure, not only the diff.
 - AC8: `git grep -n -f <(grep -oE '=.+' couchdb.env.example | cut -c2-) -- deploy/` matches only `deploy/quadlets/couchdb.env.example`. Also a code read: `check-quadlets` reads only `couchdb.env.example`.
