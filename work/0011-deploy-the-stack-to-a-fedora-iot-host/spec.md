@@ -7,7 +7,7 @@ from: intent.md
 # Spec: Deploy the stack to a Fedora IoT host
 
 ## Areas of concern
-- [x] **`Memory=` breaks the Podman 5.0 floor.** — `compose.yaml`'s `mem_limit: 512m` becomes `Memory=512mb` in `couchdb.container`, and ADR 0001's 1 GB memory budget depends on that key. A dry-run of the committed quadlets on 2026-11-27 failed on Podman 5.0.3, 5.1.2, 5.2.5, 5.3.2 and 5.4.2 with `unsupported key 'Memory' in group 'Container'`, and passed on 5.5.2. Every other key passed on 5.0.3. — Proposed: ask the host side to raise the contract's floor to Podman 5.5. Fedora IoT hosts already run a newer Podman (to be confirmed on the production Pi with `podman --version`). R6 then checks against 5.5. The alternatives are worse. Dropping `mem_limit:` gives up the ADR 0001 budget, and `PodmanArgs=--memory` is banned by the contract. A hand-added `[Service] MemoryMax=` would break the podlet diff. — decided: raise the floor to Podman 5.5. The owner takes this to the host side; ADR 0003 is amended in this item (R10).
+- [x] **`Memory=` breaks the Podman 5.0 floor.** — `compose.yaml`'s `mem_limit: 512m` becomes `Memory=512mb` in `couchdb.container`, and ADR 0001's 1 GB memory budget depends on that key. A dry-run of the committed quadlets on 2026-11-27 failed on Podman 5.0.3, 5.1.2, 5.2.5, 5.3.2 and 5.4.2 with `unsupported key 'Memory' in group 'Container'`, and passed on 5.5.2. With `Memory=` removed, the bundle passes on 5.0.3 (exit 0, no errors), so every other key is fine at 5.0. — Proposed: ask the host side to raise the contract's floor to Podman 5.5. Fedora IoT hosts already run a newer Podman (to be confirmed on the production Pi with `podman --version`). R6 checks the bundle against 5.5. The alternatives are worse. Dropping `mem_limit:` gives up the ADR 0001 budget, and `PodmanArgs=--memory` is banned by the contract. A hand-added `[Service] MemoryMax=` would break the podlet diff. — decided: raise the floor to Podman 5.5. The owner takes this to the host side; ADR 0003 is amended in this item (R10).
 - [x] **Should the floor dry-run be a standing check?** — The intent left open whether it runs once during the build or on every verify. It caught a real problem the first time it ran, and a later `compose.yaml` edit or podlet bump could add another newer key. It costs one extra container run per verify (about 1 s once the image is cached). — Proposed: make it a standing step in `check-quadlets`. — decided: run it once, during the build, and record the result in the PR. `verify` stays as it is.
 - [x] **The end-to-end proof can't run until the host tool exists.** — The intent's proof is a host tool following the contract bringing CouchDB up on Fedora IoT, but the host side hasn't built that tool. — Proposed: 0011 closes on the bundle checks (R1–R7), plus a local install that does by hand what the host tool will do (AC9). The real run on the production Pi moves to 0005, which already depends on 0011 and is the first live check there. 0005's intent gains that step when this is decided. — decided: as proposed. 0005's intent now carries the first real install.
 - [x] **Assumption: the host tool keeps the env file.** — It "removes files a new version drops", and `couchdb.env` sits in the installed quadlet directory but is never in the bundle. If the host tool deletes it, CouchDB starts with no admin. — Proposed: the contract says the host writes `couchdb.env` before any unit starts, so this is assumed to hold. Raise it with the host side as a note, not a blocker. — decided: as proposed.
@@ -37,7 +37,7 @@ Prior items: 0002 wrote `compose.yaml` and `check-quadlets`. 0003 moved CouchDB 
   - (i) a `.container` without `WantedBy=default.target` under `[Install]`;
   - (j) an `Image=` with no tag, or tagged `latest`.
 - R6. The committed bundle is accepted by `quadlet -dryrun -user` at the contract's floor, Podman 5.5. This is checked once, during the build, with the command and output recorded in the PR. It isn't a standing verify step. The existing 6.1.3 dry-run in `check-quadlets` stays.
-- R7. The bundle passes R4–R6 once the Memory concern is resolved.
+- R7. The committed bundle passes R4–R6.
 - R8. The rules in 0008 R3 and R4 still hold: `--skip-if-no-podman` skips only when Podman is missing or unreachable, and every later failure fails.
 - R9. No secret enters the bundle, the check's output or the logs. Only `couchdb.env.example` (fake values) is copied, and the check never reads `couchdb.env`.
 - R10. Docs match:
@@ -50,7 +50,7 @@ Prior items: 0002 wrote `compose.yaml` and `check-quadlets`. 0003 moved CouchDB 
 ```
 config/*.ini              # source of truth (unchanged)
 couchdb.env.example       # source of truth (unchanged)
-compose.yaml              # unchanged, except mem_limit if the Memory concern changes it
+compose.yaml              # unchanged
 deploy/quadlets/
   couchdb.container       # podlet output
   liquid-sync.network     # podlet output
@@ -75,7 +75,7 @@ The script stays bash with `set -euo pipefail`, shellcheck-clean, and keeps `--h
 
 ## Acceptance criteria
 - AC1 (R1, R3): `scripts/check-quadlets --write` on a clean tree, then `find deploy/quadlets -type f | sort`, lists exactly `couchdb.container`, `liquid-sync.network`, `couchdb.env.example`, `config/10-single-node.ini` and `config/20-livesync.ini`. `git status` shows no other change.
-- AC2 (R2): `diff -r config deploy/quadlets/config` and `cmp couchdb.env.example deploy/quadlets/couchdb.env.example` both exit 0. `podman compose config` still exits 0.
+- AC2 (R2): `diff -r config deploy/quadlets/config` and `cmp couchdb.env.example deploy/quadlets/couchdb.env.example` both exit 0. `compose.yaml` is unchanged from main (`git diff --quiet main -- compose.yaml`).
 - AC3 (R4): each of these, made in a scratch copy of the repo, makes `scripts/check-quadlets` exit 1 and name the file:
   - an edit to `deploy/quadlets/config/20-livesync.ini`;
   - deleting `deploy/quadlets/couchdb.env.example`;
@@ -92,7 +92,7 @@ The script stays bash with `set -euo pipefail`, shellcheck-clean, and keeps `--h
   - write a throwaway `couchdb.env` (mode 0600);
   - run `systemctl --user daemon-reload` and start `couchdb.service`.
 
-  Then `curl -fsS http://127.0.0.1:5984/_up` returns `ok`, and `scripts/check-couchdb-config` prints no MISMATCH. The machine is arm64 with SELinux enforcing on Apple silicon. This is a stand-in for the real run in 0005, not a replacement.
+  Then `curl -fsS http://127.0.0.1:5984/_up` returns `ok`, and `scripts/check-couchdb-config` (given the throwaway credentials through `COUCHDB_USER` and `COUCHDB_PASSWORD`) prints no MISMATCH. The machine is arm64 with SELinux enforcing on Apple silicon. This is a stand-in for the real run in 0005, not a replacement.
 - AC10 (R10): README and ADR 0001 describe the bundle's copies and the sync check (code read).
 
 ## Open questions

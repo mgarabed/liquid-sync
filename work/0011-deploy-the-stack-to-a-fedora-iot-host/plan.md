@@ -24,7 +24,8 @@ from: spec.md
 - [ ] 1. **Bundle copies.**
   - In `check-quadlets`, after podlet runs, add `cp -R "$tmp/src/config" "$tmp/src/out/config"` and `cp "$root/couchdb.env.example" "$tmp/src/out/couchdb.env.example"`. Don't copy the staged `couchdb.env`: that's the same file under the real name, and it must not land in the bundle.
   - Widen `assert_committed`. It accepts unit files at the top level, `couchdb.env.example` at the top level, and `config/*.ini`. Anything else, or any non-regular file, still refuses the delete.
-  - Change the dry-run staging to `cp -R "$committed/." "$tmp/q/"`.
+  - Make both copies recursive. The `--write` copy becomes `cp -R "$tmp/src/out/." "$committed/"`. Today's `cp "$tmp/src/out/"*` would fail on `out/config/` under `set -e` after the `rm -rf` had already run, leaving the bundle deleted. The dry-run staging becomes `cp -R "$committed/." "$tmp/q/"`.
+  - Change the `wrote` loop to list every file (`find "$committed" -type f | sort`), not only the top level.
   - Run `scripts/check-quadlets --write`, review the diff (only the three new files), and run `sdlc verify --fast`.
 - [ ] 2. **Contract lint.** Add `lint_bundle <dir>`, which appends a `file: rule` line per violation and returns non-zero if there are any. It covers each 0011 R5 rule (a)–(j):
   - Use `find` for the file-type and extension rules.
@@ -43,7 +44,8 @@ from: spec.md
   - Amend ADR 0003's floor to 5.5, adding the step 4 evidence and the date. Say that the host side agreed, or that the change is pending its agreement, whichever is true at the time.
   - Amend ADR 0001's relative-paths rule.
   - Update the README layout block.
-- [ ] 6. **Hand install on the Podman machine (0011 AC9),** recorded in the PR.
+- [ ] 6. **Hand install on the Podman machine (0011 AC9),** recorded in the PR. Put the commands in a scratch script, not inline: the secrets guard blocks any command line that names the env file. The throwaway env file is written from `couchdb.env.example`'s fake values inside the machine. `COUCHDB_USER` and `COUCHDB_PASSWORD` are exported from those same fake values for `scripts/check-couchdb-config`, because a build worktree has no git-ignored env file to fall back to.
+  - First run `podman compose down`, without `-v`, so the dev volume is kept. The quadlet unit runs `podman run --replace --name liquid-sync-couchdb` (checked in the 5.5 dry-run), so in a shared rootless store it would otherwise remove the compose stack's container.
   - In `podman machine ssh`, as the machine's default user:
     - copy the bundle to `~/.config/containers/systemd/liquid-sync-test/`;
     - write a throwaway `couchdb.env` there with the fake example values, mode 0600;
@@ -76,11 +78,11 @@ from: spec.md
 
 ## Proof
 - AC1: `scripts/check-quadlets --write && find deploy/quadlets -type f | sort` lists exactly the five files, and `git status --short` shows only those.
-- AC2: `diff -r config deploy/quadlets/config && cmp couchdb.env.example deploy/quadlets/couchdb.env.example && podman compose config >/dev/null` exits 0.
+- AC2: `diff -r config deploy/quadlets/config && cmp couchdb.env.example deploy/quadlets/couchdb.env.example && git diff --quiet main -- compose.yaml` exits 0. `compose.yaml` doesn't change, so local compose behaves as before. (`podman compose config` needs the git-ignored env file, which a build worktree doesn't have.)
 - AC3: in `git worktree add /tmp/q11 HEAD`, apply each of the three mutations, run `scripts/check-quadlets`, and expect exit 1 with the path in the diff output. Remove the worktree afterwards.
 - AC4: `scripts/test-check-quadlets` exits 0 and prints one `ok` per rule plus the clean pass.
 - AC5: the two dry-run outputs from step 4, in the PR.
-- AC6 and AC7: `sdlc verify` ends with `verify: PASS`. `PODMAN=/nonexistent scripts/check-quadlets --skip-if-no-podman` exits 0 with `SKIPPED`. A lint mutation with Podman reachable exits 1, which AC3's run covers with the extra-file case.
+- AC6 and AC7: `sdlc verify` ends with `verify: PASS`. `PODMAN=/nonexistent scripts/check-quadlets --skip-if-no-podman` exits 0 with `SKIPPED`. In the AC3 worktree, adding `PodmanArgs=--privileged` to `deploy/quadlets/couchdb.container` and running `scripts/check-quadlets --skip-if-no-podman` with Podman reachable exits 1 and names the lint rule (d) failure, not only the diff.
 - AC8: `git grep -n -f <(grep -oE '=.+' couchdb.env.example | cut -c2-) -- deploy/` matches only `deploy/quadlets/couchdb.env.example`. Also a code read: `check-quadlets` reads only `couchdb.env.example`.
 - AC9: the step 6 transcript in the PR (`_up` returns ok, no MISMATCH, plus `getenforce`, `uname -m`, `podman --version`).
 - AC10: a code read of the README and the ADR 0001 and ADR 0003 diffs.
