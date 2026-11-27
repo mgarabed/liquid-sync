@@ -85,7 +85,7 @@ lint_bundle() {
     while IFS= read -r v; do
       case "$v" in
         *.network)
-          [ -n "$(find "$dir" -type f -name "$v" -print -quit)" ] \
+          [[ "$v" != */* ]] && [ -f "$dir/$v" ] && [ ! -L "$dir/$v" ] \
             || err "$rel" "Network=$v not allowed (no such .network file in the bundle)" ;;
         *) err "$rel" "Network=$v not allowed (only the bundle's own .network file)" ;;
       esac

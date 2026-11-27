@@ -116,6 +116,12 @@ expect_fail "0011 R5(e): Network=host" "couchdb.container: Network=host not allo
 fresh; edit couchdb.container 's/^Network=.*/Network=other.network/'
 expect_fail "0011 R5(e): Network= names a missing .network" "Network=other.network not allowed (no such .network file"
 
+fresh; mv "$case_dir/liquid-sync.network" "$case_dir/config/"
+expect_fail "0011 R5(e): .network outside the bundle's top level" "Network=liquid-sync.network not allowed (no such .network file"
+
+fresh; edit couchdb.container 's/^Network=.*/Network=*.network/'
+expect_fail "0011 R5(e): Network= glob" "Network=*.network not allowed (no such .network file"
+
 fresh; add_to_section liquid-sync.network '[Network]' 'Driver=macvlan'
 expect_fail "0011 R5(f): Driver= in .network" "liquid-sync.network: Driver= not allowed"
 
