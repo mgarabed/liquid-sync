@@ -2,7 +2,7 @@
 id: 0010
 title: Tailnet prerequisites provided by homelab ADR 0005
 type: chore
-status: specced
+status: planned
 risk: low
 tier: 
 priority: P2
