@@ -51,7 +51,7 @@ On the liquid-sync side:
 
 ## Open questions
 - [x] Is the homelab policy file merged and applied, with its tests passing? — Yes, as of 2026-11-26: homelab's tailnet policy is live (tests pass), the production Pi is tagged `tag:server`, and MagicDNS and HTTPS certificates are on. Still to come: the Pi advertising `svc:liquid-sync` and applying the serve config, which needs the stack running there (0011).
-- [ ] How does this repo confirm the prerequisites without being able to read the homelab repo? Options are a manual checklist in the runbook (`curl` from a tailnet device, a denied port, a non-owner device), or a later `doctor` check (0015).
+- [x] How does this repo confirm the prerequisites without being able to read the homelab repo? Options are a manual checklist in the runbook (`curl` from a tailnet device, a denied port, a non-owner device), or a later `doctor` check (0015). — Deferred (spec, 2026-11-26): nothing can be checked from this repo until the stack runs on the Pi. The live check goes into 0005's runbook, and a `doctor` check can follow in 0015.
 
 ## Tier
 <!-- Recorded at first accept. -->

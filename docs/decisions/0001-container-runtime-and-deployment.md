@@ -10,10 +10,11 @@ liquid-sync's reference production host is a Raspberry Pi 4 running
 [Fedora IoT](https://docs.fedoraproject.org/en-US/iot/), an image-based OS
 that runs workloads as containers under Podman and systemd. The owner's Pi is
 an 8 GB Pi 4 that boots from a USB flash drive, and it's shared with other
-homelab services, which live in a separate private repo. Amended 2026-11-26
-(0010): corrected the Pi's memory and boot drive. The dev machine is a Mac
-that already runs Colima with Docker for other projects. CLAUDE.md requires `compose.yaml` to work with both
-`docker compose` and `podman compose`.
+homelab services, which live in a separate private repo. The dev machine is
+a Mac that already runs Colima with Docker for other projects. CLAUDE.md
+requires `compose.yaml` to work with both `docker compose` and
+`podman compose`. Amended 2026-11-26 (0010): corrected the Pi's memory and
+boot drive.
 
 On Fedora IoT, the native way to run containers under systemd is
 [Quadlet](https://docs.podman.io/en/stable/markdown/podman-systemd.unit.5.html):
@@ -144,7 +145,9 @@ Where the container definitions are kept (the source of truth):
       `127.0.0.1` only, and the tailnet reaches it only through the host's
       `tailscale serve` on `svc:liquid-sync`, never `tailscale funnel`. The
       tailnet policy in the homelab repo limits access to 443 on
-      `svc:liquid-sync` (homelab ADR 0005). Amended 2026-11-26.
+      `svc:liquid-sync` (homelab ADR 0005). CouchDB keeps
+      `require_valid_user` on regardless, because the loopback port is
+      reachable by other local users on a shared host. Amended 2026-11-26.
 
 ### Local development
 

@@ -28,8 +28,8 @@ CLAUDE.md:
 - One multi-arch (amd64 and arm64) container per service, rootless under
   Podman, expressible in `compose.yaml` that podlet converts to quadlets.
 - 1 GB of memory for all liquid-sync containers together, on an 8 GB Pi 4
-  shared with other services. Amended 2026-11-26: the Pi has
-  8 GB, not 4 GB; the budget is unchanged.
+  shared with other services. Amended 2026-11-26: the Pi has 8 GB, not 4 GB;
+  the budget is unchanged.
 - Clients are sacred: the archiver only reads. It never writes to a vault's
   database.
 - Boring tech: a new language or runtime needs an ADR. This is that ADR.

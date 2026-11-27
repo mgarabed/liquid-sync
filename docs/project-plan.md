@@ -125,6 +125,7 @@ The archive repo is the exit path: a plain Markdown vault plus full history.
 - The dev stack on the Mac is only reachable on `localhost`, because a Mac
   signed in as a user can't host a Service. So there's no laptop → Pi move:
   clients switch to `svc:liquid-sync` once, when the Pi first publishes it.
+  The localhost test vault is a throwaway and isn't carried over.
 - Clients point at the Tailscale Service `svc:liquid-sync`, not the machine.
   Moving hosts means the homelab repo has the new host advertise the Service
   and the old one stop (homelab ADR 0005).
@@ -199,7 +200,8 @@ videos), and per-device names for conflict attribution.
 ### Phase 5 — Backup / restore and the Pi
 - `backup` / `restore` and a scheduled backup
 - `deploy/`: a liquid-sync stack for any Fedora IoT host, run rootless;
-  quadlets generated from `compose.yaml` by podlet; `podman auto-update`
+  quadlets generated from `compose.yaml` by podlet; `podman auto-update`.
+  Work item 0011 first deploys the stack to the Pi, in Phase 1
 - Host migration drill: the Pi → a replacement Service host using `restore`,
   with no client changes
 - Migrate the remaining vaults

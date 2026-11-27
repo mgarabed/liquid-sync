@@ -20,7 +20,7 @@ Self-hosted, low-maintenance sync and history for personal Obsidian vaults.
 ```
  iPhone / iPad / Mac / Linux
    Obsidian + Self-hosted LiveSync plugin
-            │  HTTPS over Tailscale (stable MagicDNS name)
+            │  HTTPS over Tailscale (Service svc:liquid-sync)
             ▼
  ┌──────────────────────────────── host (Pi 4) ────────┐
  │  tailscale serve ──► CouchDB (1 database per vault) │
