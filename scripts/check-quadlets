@@ -11,13 +11,19 @@ PODMAN_IMAGE="quay.io/podman/stable:v6.1.3@sha256:1d280cfab8e4cdaa221229c121f681
 usage() {
   cat <<'EOF'
 Usage: scripts/check-quadlets [--write] [--skip-if-no-podman] [--help]
+       scripts/check-quadlets --lint-only <dir>
 
-Regenerates the quadlets from compose.yaml with podlet and compares them with
-the committed files in deploy/quadlets/, then validates the committed files
-with `quadlet -dryrun -user`. Exits non-zero on any difference or error.
+Regenerates the bundle from compose.yaml with podlet (the quadlets plus copies
+of config/ and couchdb.env.example) and compares it with the committed
+deploy/quadlets/. Then lints the committed bundle against the ADR 0003 layout
+and quadlet promises, and validates it with `quadlet -dryrun -user`. Exits
+non-zero on any difference or error.
 
-  --write   Replace deploy/quadlets/ with freshly generated files, then
-            validate them. Use after editing compose.yaml.
+  --write   Replace deploy/quadlets/ with a freshly generated bundle, then
+            validate it. Use after editing compose.yaml, config/ or
+            couchdb.env.example.
+  --lint-only <dir>
+            Only lint <dir> against ADR 0003, then exit. Needs no Podman.
   --skip-if-no-podman
             Exit 0 with a SKIPPED warning when Podman isn't installed or
             can't reach an engine; every other failure still fails.
@@ -30,16 +36,125 @@ EOF
 
 die() { echo "check-quadlets: $*" >&2; exit 1; }
 
+# Prints the values of Key= lines in a unit file, one per line. Keys are
+# matched whole and line-anchored, so comments and longer keys never match.
+unit_values() {
+  awk -v k="$2" '
+    { line = $0; sub(/^[ \t]+/, "", line) }
+    line ~ /^[#;]/ { next }
+    {
+      i = index(line, "="); if (!i) next
+      key = substr(line, 1, i - 1); sub(/[ \t]+$/, "", key)
+      if (key != k) next
+      v = substr(line, i + 1); sub(/^[ \t]+/, "", v); sub(/[ \t\r]+$/, "", v)
+      print v
+    }' "$1"
+}
+
+# Lints a bundle directory against the ADR 0003 layout rules and quadlet
+# promises (0011 R5). Prints one "file: rule" line per violation to stderr and
+# returns 1 if there are any. It checks only what the contract states.
+lint_bundle() {
+  local dir="${1%/}" f rel v name tag n_ports=0
+  local -a errs=()
+  err() { errs+=("$1: $2"); }
+
+  while IFS= read -r -d '' f; do
+    err "${f#"$dir/"}" "not a regular file or directory (no symlinks or other file types)"
+  done < <(find "$dir" -mindepth 1 ! -type f ! -type d -print0)
+
+  while IFS= read -r -d '' f; do
+    rel="${f#"$dir/"}"
+    case "$f" in
+      *.kube|*.image|*.build|*.artifact)
+        err "$rel" "unit type not allowed (only .container, .network, .volume, .pod)" ;;
+    esac
+  done < <(find "$dir" -type f -print0)
+
+  while IFS= read -r -d '' f; do
+    rel="${f#"$dir/"}"
+
+    while IFS= read -r v; do
+      n_ports=$((n_ports + 1))
+      [ "$v" = 127.0.0.1:5984:5984 ] \
+        || err "$rel" "PublishPort=$v not allowed (only 127.0.0.1:5984:5984)"
+    done < <(unit_values "$f" PublishPort)
+
+    [ -z "$(unit_values "$f" PodmanArgs)" ] || err "$rel" "PodmanArgs= not allowed"
+
+    while IFS= read -r v; do
+      case "$v" in
+        *.network)
+          [ -n "$(find "$dir" -type f -name "$v" -print -quit)" ] \
+            || err "$rel" "Network=$v not allowed (no such .network file in the bundle)" ;;
+        *) err "$rel" "Network=$v not allowed (only the bundle's own .network file)" ;;
+      esac
+    done < <(unit_values "$f" Network)
+
+    while IFS= read -r v; do
+      [ "$v" = couchdb.env ] || err "$rel" "EnvironmentFile=$v not allowed (only couchdb.env)"
+    done < <(unit_values "$f" EnvironmentFile)
+
+    while IFS= read -r v; do
+      name="${v%%@*}"; name="${name##*/}"
+      if [[ "$name" != *:* ]]; then
+        err "$rel" "Image=$v has no tag"
+      else
+        tag="${name##*:}"
+        [ "$tag" != latest ] || err "$rel" "Image=$v is tagged latest"
+      fi
+    done < <(unit_values "$f" Image)
+
+    case "$f" in
+      *.network)
+        for v in Driver NetworkInterface Options; do
+          [ -z "$(unit_values "$f" "$v")" ] || err "$rel" "$v= not allowed in a .network file (default bridge only)"
+        done ;;
+      *.volume)
+        [ -n "$(unit_values "$f" VolumeName)" ] || err "$rel" "missing VolumeName=" ;;
+      *.container)
+        awk '
+          /^[ \t]*\[/ { sec = $0; gsub(/[ \t\r]/, "", sec); next }
+          sec == "[Install]" && /^[ \t]*WantedBy[ \t]*=/ {
+            v = $0; sub(/^[^=]*=/, "", v); n = split(v, w, /[ \t\r]+/)
+            for (i = 1; i <= n; i++) if (w[i] == "default.target") found = 1
+          }
+          END { exit !found }' "$f" \
+          || err "$rel" "missing WantedBy=default.target under [Install]" ;;
+    esac
+  done < <(find "$dir" -type f \( -name '*.container' -o -name '*.network' \
+    -o -name '*.volume' -o -name '*.pod' \) -print0 | sort -z)
+
+  [ "$n_ports" -le 1 ] || err "(bundle)" "$n_ports PublishPort= lines (only one allowed)"
+
+  [ "${#errs[@]}" -eq 0 ] && return 0
+  printf 'check-quadlets: lint: %s\n' "${errs[@]}" >&2
+  return 1
+}
+
 write=0
 skip_if_no_podman=0
-for arg in "$@"; do
-  case "$arg" in
+lint_only=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
     --write) write=1 ;;
     --skip-if-no-podman) skip_if_no_podman=1 ;;
+    --lint-only)
+      [ "$#" -ge 2 ] || { usage >&2; die "--lint-only needs a directory"; }
+      lint_only="$2"; shift ;;
     -h|--help) usage; exit 0 ;;
-    *) usage >&2; die "unknown argument: $arg" ;;
+    *) usage >&2; die "unknown argument: $1" ;;
   esac
+  shift
 done
+
+# Runs before the Podman check: linting needs no Podman.
+if [ -n "$lint_only" ]; then
+  [ -d "$lint_only" ] || die "--lint-only: '$lint_only' is not a directory"
+  lint_bundle "$lint_only" || die "FAILED: lint"
+  echo "check-quadlets: lint OK"
+  exit 0
+fi
 
 PODMAN="${PODMAN:-podman}"
 
@@ -152,7 +267,9 @@ elif ! diff -r "$tmp/src/out" "$committed" >&2; then
   failed+=(diff)
 fi
 
-# The dry-run runs even after a diff failure, so both problems are reported.
+lint_bundle "$committed" || failed+=(lint)
+
+# The dry-run runs even after a diff or lint failure, so all problems are reported.
 mkdir -p "$tmp/q"
 cp -R "$committed/." "$tmp/q/"
 if ! "$PODMAN" run --rm -v "$tmp/q:/q:Z" -e QUADLET_UNIT_DIRS=/q "$PODMAN_IMAGE" \

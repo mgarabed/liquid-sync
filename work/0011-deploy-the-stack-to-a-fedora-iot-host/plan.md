@@ -27,7 +27,7 @@ from: spec.md
   - Make both copies recursive. The `--write` copy becomes `cp -R "$tmp/src/out/." "$committed/"`. Today's `cp "$tmp/src/out/"*` would fail on `out/config/` under `set -e` after the `rm -rf` had already run, leaving the bundle deleted. The dry-run staging becomes `cp -R "$committed/." "$tmp/q/"`.
   - Change the `wrote` loop to list every file (`find "$committed" -type f | sort`), not only the top level.
   - Run `scripts/check-quadlets --write`, review the diff (only the three new files), and run `sdlc verify --fast`.
-- [ ] 2. **Contract lint.** Add `lint_bundle <dir>`, which appends a `file: rule` line per violation and returns non-zero if there are any. It covers each 0011 R5 rule (a)–(j):
+- [x] 2. **Contract lint.** Add `lint_bundle <dir>`, which appends a `file: rule` line per violation and returns non-zero if there are any. It covers each 0011 R5 rule (a)–(j):
   - Use `find` for the file-type and extension rules.
   - Read each unit file's keys with `grep -E '^Key='`, keeping them line-anchored so comments don't match.
   - (c): exactly one `PublishPort=` line across all units, equal to `PublishPort=127.0.0.1:5984:5984`.
