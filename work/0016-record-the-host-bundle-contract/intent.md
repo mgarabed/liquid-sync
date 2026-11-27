@@ -50,7 +50,7 @@ small — docs only, three or four files, no code.
 - A read of the diff finds no host-side repo paths, host names, secret-store names or ADR numbers that weren't already committed.
 
 ## Order of work
-- [ ] Add `docs/decisions/0003-host-bundle-contract.md` from `adr-0003-draft.md`.
+- [x] Add `docs/decisions/0003-host-bundle-contract.md` from `adr-0003-draft.md`.
 - [ ] Amend ADR 0001 (dated 2026-11-27, 0016).
 - [ ] Update `docs/project-plan.md` (and `README.md` if needed).
 - [ ] Run `sdlc verify`.
