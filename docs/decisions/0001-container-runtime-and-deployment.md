@@ -61,15 +61,21 @@ Where the container definitions are kept (the source of truth):
   Quadlet resolves relative `EnvironmentFile=` and bind-mount paths against
   the unit file's directory, so the env file (mode 0600) and config
   directories are installed next to the quadlets, in a directory the service
-  user owns. `deploy/` can then install and update them without root.
-  Nothing in liquid-sync needs root. Rootless Podman can't bind ports below
+  user owns. The host tool installs `deploy/quadlets/` there and runs
+  `deploy/hooks/` as the service user
+  ([ADR 0003](0003-host-bundle-contract.md)). Nothing in liquid-sync needs
+  root. Rootless Podman can't bind ports below
   1024 ([rootless.md](https://github.com/containers/podman/blob/main/rootless.md)),
   and liquid-sync doesn't need to: the host's own tailscaled serves 443 (see
   Tailscale publishing). Amended 2026-11-26 (0010): the Tailscale sidecar
-  that ran in userspace networking is dropped.
+  that ran in userspace networking is dropped. Amended 2026-11-27 (0016):
+  the host tool, not `deploy/`, installs and updates the bundle, and it
+  provides the service user and lingering.
 - **Shared host and the homelab-repo split:** the Pi is shared with other
   homelab services. This repo owns only the liquid-sync stack: its quadlets,
-  its service user, and its data covered by `backup`/`restore`. The host OS
+  its hooks, and its data covered by `backup`/`restore`. Amended 2026-11-27
+  (0016): the service user is provided by the host tool, under the bundle
+  contract in [ADR 0003](0003-host-bundle-contract.md). The host OS
   setup and the other services live in a separate private repo. Other
   services may run rootful; that's their repo's business.
 - **Source of truth:** option A. `compose.yaml` is the source. The quadlets
@@ -132,8 +138,8 @@ Where the container definitions are kept (the source of truth):
 - [ ] `env_file:` for configuration and secrets; no `${VAR}` interpolation
       anywhere in the file.
 - [ ] `env_file:` and bind-mount sources are relative paths inside the
-      directory `deploy/` installs next to the quadlets, never absolute
-      host paths.
+      quadlet directory the host tool installs from `deploy/quadlets/`,
+      never absolute host paths. Amended 2026-11-27 (0016).
 - [ ] None of `include`, `extends`, `build`, `deploy`, `profiles` or `scale`.
       Podlet rejects them all.
 - [ ] Memory limits via `mem_limit:` (not `deploy.resources`), summing to
@@ -326,7 +332,10 @@ file using `${TAG}` (even with `TAG` set), `include`, `extends`, `build`,
 
 - liquid-sync on a host needs a dedicated user with lingering, and its
   quadlets, env file (0600) and config installed together in that user's
-  `~/.config/containers/systemd/`, all declared in `deploy/`.
+  `~/.config/containers/systemd/`. Amended 2026-11-27 (0016): `deploy/`
+  declares the quadlets, their config and the hooks; the host tool provides
+  the user and lingering, writes `couchdb.env`, and installs the rest
+  ([ADR 0003](0003-host-bundle-contract.md)).
   `podman auto-update` runs as that user's `podman-auto-update.timer`.
 - The stack needs no Tailscale container and no added capabilities. The
   host's tailscaled publishes `svc:liquid-sync` (homelab ADR 0005), so the
