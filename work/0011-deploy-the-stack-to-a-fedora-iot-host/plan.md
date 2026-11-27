@@ -41,7 +41,7 @@ from: spec.md
   - Wire it into `check-quadlets`. Before the Podman availability check, the normal run (check mode and `--write`, never `--lint-only`, which would recurse) runs `"$root/scripts/test-check-quadlets"`. A failure adds `lint-tests` to the failures and fails the run, even when Podman is missing: the 0008 R3/R4 skip covers only Podman being unavailable, and these tests don't need Podman. On a SKIPPED run, the SKIPPED line still prints and the lint tests' own `ok` lines show that they ran.
   - `.sdlc/config.toml` doesn't change: control-file edits need the high tier, and 0011 is standard (owner decision, 2026-11-27).
 - [x] 4. **Floor dry-run, once (0011 R6).** Pin `quay.io/podman/stable:v5.5` by digest for the record, using `podman manifest inspect` or `skopeo inspect` for the index digest. Run `quadlet -dryrun -user` on the committed bundle (expect exit 0 and no `unsupported key`), then on `v5.4` (expect `unsupported key 'Memory'`). Save both outputs for the PR and for ADR 0003. Nothing is committed in this step apart from ticking it.
-- [ ] 5. **Docs.**
+- [x] 5. **Docs.**
   - Amend ADR 0003's floor to 5.5, adding the step 4 evidence and the date. Say that the host side agreed, or that the change is pending its agreement, whichever is true at the time.
   - Amend ADR 0001's relative-paths rule.
   - Update the README layout block.

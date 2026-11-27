@@ -147,6 +147,12 @@ Where the container definitions are kept (the source of truth):
 - [ ] `env_file:` and bind-mount sources are relative paths inside the
       quadlet directory the host tool installs from `deploy/quadlets/`,
       never absolute host paths. Amended 2026-11-27 (0016).
+      Amended 2026-11-27 (0011): the repo-root `config/` and
+      `couchdb.env.example` stay the sources of truth, so local compose
+      keeps using them. `deploy/quadlets/` carries byte-identical copies
+      (`config/*.ini`, `couchdb.env.example`) so the installed bundle
+      resolves the same relative paths. `scripts/check-quadlets --write`
+      writes them and its check mode fails when they drift.
 - [ ] None of `include`, `extends`, `build`, `deploy`, `profiles` or `scale`.
       Podlet rejects them all.
 - [ ] Memory limits via `mem_limit:` (not `deploy.resources`), summing to

@@ -24,7 +24,7 @@ no manifest, no installer, and nothing that needs root.
 - `deploy/quadlets/`: the podlet-generated quadlets plus every config file
   they mount.
   - Unit files are only `.container`, `.volume`, `.network` and `.pod`,
-    needing nothing newer than Podman 5.0.
+    needing nothing newer than Podman 5.5 (amended from 5.0, see below).
   - Any other regular file is allowed and installed alongside them: config
     the units mount (such as `config/*.ini`), `*.env.example`, and hook
     helpers. None of them may use a unit extension, or Quadlet would treat
@@ -119,3 +119,32 @@ CouchDB admin password, arrives in an env file the host supplies.
   vault. It waits for the host tool to be built.
 - A change to this contract is agreed with the host side and recorded in a
   new ADR that supersedes this one.
+
+## Amendment 2026-11-27 (0011): Podman floor raised from 5.0 to 5.5
+
+Status: pending the host side's agreement. If the host side declines, the
+fallback is to drop `mem_limit:` from `compose.yaml` and reopen ADR 0001's
+memory budget.
+
+`compose.yaml`'s `mem_limit: 512m` becomes `Memory=512mb` in
+`couchdb.container`, and ADR 0001's 1 GB memory budget depends on it. Quadlet
+only accepts `Memory=` from Podman 5.5. The alternatives are worse:
+`PodmanArgs=--memory` is banned above, and a hand-added `[Service]
+MemoryMax=` would break the podlet diff in `check-quadlets`.
+
+Evidence: `quadlet -dryrun -user` on the committed `deploy/quadlets/`, run
+once during 0011 with
+`podman run --rm -v <bundle>:/q:Z -e QUADLET_UNIT_DIRS=/q <image> /usr/libexec/podman/quadlet -dryrun -user`:
+
+- `quay.io/podman/stable:v5.5@sha256:25d49cf990843962043942db172c7ef5c6f85012384aada7976aec65906ae209`
+  (Podman 5.5.2): exit 0, no `unsupported key`.
+- `quay.io/podman/stable:v5.4@sha256:52536d900c9e7e7cc924bb737eb8c570eeaa3c50f6a3b0b563eb0ec9c48807e4`
+  (Podman 5.4.2): exit 1,
+  `unsupported key 'Memory' in group 'Container' in /q/couchdb.container`.
+- Earlier the same day, 5.0.3, 5.1.2, 5.2.5 and 5.3.2 failed the same way,
+  and 5.0.3 passed with `Memory=` removed, so `Memory=` is the only key that
+  needs more than 5.0.
+
+The first real install by a host tool, the end-to-end proof listed under
+Consequences, moved to 0005. 0011 closes on the bundle checks and a hand
+install that does what the host tool will do.
