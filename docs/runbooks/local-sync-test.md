@@ -10,8 +10,8 @@ steps.
 
 ## Before you start
 
-- The stack is up (`podman compose up -d`, see the README's "Run locally").
-- `scripts/check-couchdb-config` passes.
+- The stack is up and its config checks clean: run `./liquid-sync init`
+  (see the README's "Run locally"). It ends with `init: done`.
 - Run the shell steps below in **bash**. zsh's `read -p` does something else.
 - Pick a throwaway secret for the test user. You'll type it into Obsidian, so
   avoid `"` and `\` (the helpers below don't escape them).

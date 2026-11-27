@@ -39,11 +39,13 @@ development uses [Podman machine](https://docs.podman.io/en/stable/markdown/podm
 If `podman` isn't on your PATH, it's at `/opt/podman/bin/podman`.
 
 ```sh
-cp couchdb.env.example couchdb.env   # then set COUCHDB_PASSWORD; CouchDB won't start without it
-podman compose up -d
-curl -u admin:<password> http://127.0.0.1:5984/_up
+./liquid-sync init                   # create couchdb.env if missing, start the stack, check it
 podman compose down                  # add -v to delete the data volume too
 ```
+
+The first `init` writes `couchdb.env` (git-ignored, mode 0600) from
+`couchdb.env.example` with a random admin password, and never touches it
+after that. The password lives only in that file; init never prints it.
 
 CouchDB is configured for Self-hosted LiveSync by `config/20-livesync.ini`, and
 `scripts/check-couchdb-config` checks that the running node still matches it.
@@ -58,10 +60,13 @@ scripts/check-quadlets --write
 
 ## Planned CLI
 
-All operations go through one bootstrap script (not yet implemented):
+All operations go through one bootstrap script. Only `init` is available so
+far; the rest are planned. Every subcommand takes `--help`, and changing
+ones take `--dry-run`.
 
 ```sh
-./liquid-sync init                 # create env files, start the stack, configure CouchDB
+./liquid-sync init                 # available: create couchdb.env if missing, start the
+                                   # stack, wait for CouchDB, check its config for drift
 ./liquid-sync vault add <name>     # create a vault database + archive repo
 ./liquid-sync setup-uri <vault>    # print setup URI / QR code for a device
 ./liquid-sync migrate in <vault>   # guided import from Obsidian Sync / iCloud / git / folder
@@ -74,6 +79,7 @@ All operations go through one bootstrap script (not yet implemented):
 
 ```
 liquid-sync              # bootstrap/CLI script (bash)
+lib/common.sh            # helpers shared by the CLI and scripts/ (sourced)
 compose.yaml             # CouchDB + archiver, docker or podman
 config/                  # CouchDB *.ini (copied into local.d/), LiveSync presets
 archiver/                # CouchDB → files → git service

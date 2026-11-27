@@ -53,7 +53,7 @@ from: spec.md
   - Env step: `[ -e ]` check, then the mode check with a portable `stat`: `stat -f %Lp` on macOS, `stat -c %a` on Linux, picked by trying one and falling back. Then generation under a `umask 077` subshell, writing a `mktemp "$root/.couchdb.env.XXXXXX"` file, then `ln` into place and `rm` the temp. A trap removes the temp file on error.
   - Then the compose up, the wait and the drift check.
   - Run `bash test/liquid-sync-init.sh` until it's green, then run `sdlc verify --fast`.
-- [ ] 5. **Docs:** the README, the project plan, the ADR 0003 amendment and the runbook, as listed above.
+- [x] 5. **Docs:** the README, the project plan, the ADR 0003 amendment and the runbook, as listed above.
 - [ ] 6. **Manual run (0012 AC6), in the worktree.** The worktree has no env file, which is exactly the first-run case, so nothing needs moving.
   - Tell the user first: this briefly takes over the local dev stack. Compose recreates the `liquid-sync-couchdb` container on the worktree's new password and `config/` mount. The data volume stays.
   - Run `./liquid-sync init` twice, then `git status --short`.

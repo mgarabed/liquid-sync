@@ -37,7 +37,7 @@ every device, unlimited history, multiple vaults, and almost no upkeep.
 |---|-----------|---------|-------|
 | 1 | **CouchDB** | Sync backend, one database per vault | `couchdb:3.5`, with the settings LiveSync needs (CORS, `max_document_size`, `max_http_request_size`, `require_valid_user`). Config in `config/*.ini`, copied into CouchDB's `local.d/` at start. |
 | 2 | **Tailscale access** | Stable private hostname plus HTTPS | The Tailscale Service `svc:liquid-sync` at `https://liquid-sync.<tailnet>.ts.net` on 443. The host's own `tailscale serve` terminates TLS and forwards to CouchDB on `127.0.0.1:5984`. The homelab repo owns publishing: which `tag:server` hosts advertise the Service, the serve config, and the tailnet policy (homelab ADR 0005). The stack runs no Tailscale container. The hostname belongs to the Service, not a machine, which is what makes host migration transparent. A Mac signed in as a user can't host a Service, so local development stays on localhost. |
-| 3 | **Bootstrap CLI** (`./liquid-sync`) | Single entry point for setup and operations | Bash. Subcommands: `init`, `vault add/list/remove`, `setup-uri`, `migrate in/out`, `backup`, `restore`, `doctor`. Idempotent. On a host, `init` runs as the bundle's `post-install` hook ([ADR 0003](decisions/0003-host-bundle-contract.md)). |
+| 3 | **Bootstrap CLI** (`./liquid-sync`) | Single entry point for setup and operations | Bash. Subcommands: `init`, `vault add/list/remove`, `setup-uri`, `migrate in/out`, `backup`, `restore`, `doctor`. Idempotent. `init` is local only: on a host, the host tool supplies the env files and starts the units ([ADR 0003](decisions/0003-host-bundle-contract.md)). |
 | 4 | **Archiver** | CouchDB → Markdown files → git commits | The LiveSync CLI follows the `_changes` feed of a one-way mirror of each vault database (`<vault>-archive`) and rebuilds files (LiveSync stores notes as chunks, encrypted when E2EE is on). A bash committer commits on a debounce (e.g. 10 minutes of quiet or hourly) and pushes to a private remote. See [ADR 0002](decisions/0002-archiver-approach.md). |
 | 5 | **Client settings presets** | Consistent LiveSync configuration on every device | Settings JSON per profile (`desktop`, `mobile`), encoded into the setup URI: sync mode, hidden-file sync, exclusions for large attachments on mobile. |
 | 6 | **Setup URI / QR generator** | Onboarding | Generate an encrypted LiveSync setup URI per vault (LiveSync ships a generator script) and print a terminal QR code for phones. |
@@ -178,10 +178,11 @@ videos), and per-device names for conflict attribution.
 - ADR 0001: Docker vs Podman locally
 
 ### Phase 2 — Bootstrap CLI
-- `liquid-sync init`: wait for health, then apply CouchDB config through its HTTP API
-  (idempotent). Locally it first generates the per-service `*.env` files and starts the
-  stack; on a host it runs as the bundle's `post-install` hook, and the host tool supplies
-  the env files (ADR 0003, work item 0012)
+- `liquid-sync init` (local only, work item 0012): create `couchdb.env` from its example
+  with a random password if it's missing (never overwrite it), start the stack with
+  `podman compose up -d`, wait for an authenticated `/_up`, then run the config drift
+  check. Idempotent, with `--dry-run`. On a host, the host tool supplies the env files and
+  starts the units, and there's no `post-install` hook yet (ADR 0003, amended by 0012)
 - `vault add/list/remove`: create the database and its user/permissions
 - `setup-uri`: generate the encrypted URI and a terminal QR code
 - `doctor` v1
