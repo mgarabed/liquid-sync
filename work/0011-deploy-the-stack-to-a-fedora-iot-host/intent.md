@@ -2,7 +2,7 @@
 id: 0011
 title: Deploy the stack to a Fedora IoT host
 type: feature
-status: accepted
+status: planned
 risk: low
 tier: standard
 priority: P2
@@ -12,6 +12,7 @@ branch:
 pr: 
 source: 0006
 depends: 0016
+spec_hash: requirements=86e94cc14441;acceptance-criteria=dd651c4a7432;areas-of-concern=c2d88599546c
 ---
 # Intent: Deploy the stack to a Fedora IoT host
 
