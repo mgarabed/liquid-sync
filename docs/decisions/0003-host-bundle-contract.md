@@ -80,7 +80,11 @@ CouchDB admin password, arrives in an env file the host supplies.
   for health, then applies the CouchDB config and any migration. That's
   `liquid-sync init` without env-file generation (0012). When `couchdb.env`
   already exists, init leaves it alone and never prints it. Generating env
-  files from their examples stays a local-dev path.
+  files from their examples stays a local-dev path. Amended 2026-11-27
+  (0012): the hook is optional and not shipped yet, and `liquid-sync init`
+  isn't it. `init` is local only. CouchDB's config ships as `.ini` files, so
+  there's nothing to apply through the API. The health wait belongs to 0017
+  and the drift check to 0015, and either may add the hook.
 - `backup <dir>` and `restore <dir>`: liquid-sync chooses the format
   (Phase 5).
 
@@ -116,6 +120,9 @@ CouchDB admin password, arrives in an env file the host supplies.
 - `liquid-sync init` splits into two paths (0012):
   - a host path, the `post-install` hook;
   - a local-dev path, which also generates env files and starts the stack.
+
+  Amended 2026-11-27 (0012): only the local-dev path is built. `init` is
+  local only and isn't the `post-install` hook (see Hooks above).
 - 0011's end-to-end proof is a host tool that follows this contract and
   brings CouchDB up rootless on Fedora IoT (arm64, SELinux) with a throwaway
   vault. It waits for the host tool to be built.

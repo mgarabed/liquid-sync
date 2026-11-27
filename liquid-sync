@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+# liquid-sync: set up and run a local liquid-sync stack. See README.md.
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+PROG=liquid-sync
+# shellcheck source=lib/common.sh
+source "$root/lib/common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: ./liquid-sync [--dry-run] <command> [options]
+       ./liquid-sync <command> --help
+
+Commands:
+  init      Set up couchdb.env, start the local stack and check CouchDB.
+
+Options:
+  --dry-run Show what would change, and change nothing.
+  --help    Show this help. After a command, show that command's help.
+EOF
+}
+
+usage_init() {
+  cat <<'EOF'
+Usage: ./liquid-sync init [--dry-run] [--help]
+
+Sets up the local stack from this checkout. Safe to run again: each step
+that's already in place is reported and left alone.
+
+  1. If couchdb.env is missing, creates it from couchdb.env.example with a
+     fresh random admin password (mode 0600). An existing couchdb.env is
+     never changed; a mode looser than 0600 gets a warning.
+  2. Starts the stack with `podman compose up -d` (never docker).
+  3. Waits until CouchDB answers an authenticated GET /_up.
+  4. Runs scripts/check-couchdb-config and fails on any drift.
+
+The password is never printed. Credentials go to curl on stdin.
+
+  --dry-run   Print each step it would take, and change nothing.
+  --help      Show this help.
+
+  COUCHDB_URL          default http://127.0.0.1:5984
+  LIQUID_SYNC_TIMEOUT  seconds to wait for CouchDB, default 60
+  PODMAN               the podman binary, if it isn't on PATH
+EOF
+}
+
+dry_run=0
+CONTAINER=liquid-sync-couchdb
+tmp_env=""
+
+file_mode() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
+
+cleanup_tmp_env() { [ -z "$tmp_env" ] || rm -f "$tmp_env"; }
+
+# Create couchdb.env from the example with a fresh password. Prints
+# "created", or "exists" when another writer got there first.
+create_env_file() {
+  local env_file="$1" example="$2" pass line
+  [ -r "$example" ] || die "init: $example not found"
+  grep -q '^COUCHDB_PASSWORD=' "$example" \
+    || die "init: no COUCHDB_PASSWORD= line in $example"
+
+  # Every stage reads finite input, so nothing dies of SIGPIPE under pipefail.
+  pass="$(head -c 48 /dev/urandom | base64 | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-32)"
+  [ "${#pass}" -eq 32 ] || die "init: couldn't generate a password"
+
+  trap cleanup_tmp_env EXIT
+  tmp_env="$(umask 077 && mktemp "$root/.couchdb.env.XXXXXX")"
+  # printf is a builtin, so the password never reaches a child's argv.
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      COUCHDB_PASSWORD=*) printf 'COUCHDB_PASSWORD=%s\n' "$pass" ;;
+      *) printf '%s\n' "$line" ;;
+    esac
+  done <"$example" >"$tmp_env"
+
+  # ln is atomic and fails if the target exists, so the file appears complete
+  # or not at all, and a concurrent creator's file is never replaced.
+  if ln "$tmp_env" "$env_file" 2>/dev/null; then
+    echo created
+  elif [ -e "$env_file" ]; then
+    echo exists
+  else
+    die "init: couldn't create $env_file"
+  fi
+  rm -f "$tmp_env"
+  tmp_env=""
+}
+
+cmd_init() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      -h|--help) usage_init; exit 0 ;;
+      --dry-run) dry_run=1 ;;
+      *) usage_init >&2; echo "$PROG: init: unknown argument: $arg" >&2; exit 2 ;;
+    esac
+  done
+
+  local env_file="$root/couchdb.env" example="$root/couchdb.env.example"
+  local url="${COUCHDB_URL:-http://127.0.0.1:5984}"
+  url="${url%/}"
+  local timeout="${LIQUID_SYNC_TIMEOUT:-60}"
+  case "$timeout" in
+    ''|*[!0-9]*) die "init: LIQUID_SYNC_TIMEOUT must be a whole number of seconds" ;;
+  esac
+  local podman
+  podman="$(podman_bin)"
+
+  # 1. The env file.
+  local mode result
+  if [ -e "$env_file" ]; then
+    info "init: couchdb.env exists, left as is"
+  elif [ "$dry_run" -eq 1 ]; then
+    info "init: would create couchdb.env from couchdb.env.example (mode 0600)"
+  else
+    result="$(create_env_file "$env_file" "$example")"
+    if [ "$result" = created ]; then
+      info "init: couchdb.env created (mode 0600)"
+    else
+      info "init: couchdb.env exists, left as is"
+    fi
+  fi
+  if [ -e "$env_file" ]; then
+    mode="$(file_mode "$env_file")"
+    if [ $((8#$mode & 8#077)) -ne 0 ]; then
+      warn "init: couchdb.env has mode $mode; it holds the admin password, so run: chmod 600 couchdb.env"
+    fi
+  fi
+
+  if [ "$dry_run" -eq 1 ]; then
+    info "init: would run: $podman compose up -d"
+    info "init: would wait up to ${timeout}s for CouchDB at $url/_up"
+    info "init: would run: scripts/check-couchdb-config"
+    info "init: dry run, nothing changed"
+    return 0
+  fi
+
+  # 2. The stack. The container's id before and after tells a fresh start
+  # from one that was already up.
+  local before after
+  before="$("$podman" container inspect -f '{{.Id}} {{.State.Running}}' "$CONTAINER" 2>/dev/null || true)"
+  (cd "$root" && "$podman" compose up -d) \
+    || die "init: '$podman compose up -d' failed; is the Podman machine running?"
+  after="$("$podman" container inspect -f '{{.Id}} {{.State.Running}}' "$CONTAINER" 2>/dev/null || true)"
+  if [ -n "$before" ] && [ "$before" = "$after" ] && [ "${after#* }" = true ]; then
+    info "init: stack already up"
+  else
+    info "init: stack started"
+  fi
+
+  # 3. Wait for CouchDB.
+  local user pass
+  user="$(env_value "$env_file" COUCHDB_USER)" || die "init: COUCHDB_USER not found in couchdb.env"
+  pass="$(env_value "$env_file" COUCHDB_PASSWORD)" || die "init: COUCHDB_PASSWORD not found in couchdb.env"
+  [ -n "$user" ] && [ -n "$pass" ] || die "init: COUCHDB_USER or COUCHDB_PASSWORD is empty in couchdb.env"
+  COUCH_AUTH="$(curl_auth_line "$user" "$pass")"
+  wait_for_couch "$url" "$timeout" \
+    || die "init: CouchDB didn't answer at $url/_up within ${timeout}s"
+  info "init: CouchDB is up at $url"
+
+  # 4. Drift check. Empty credentials make it read the same couchdb.env as
+  # init did, not stale values from the caller's environment.
+  local rc=0
+  COUCHDB_USER='' COUCHDB_PASSWORD='' "$root/scripts/check-couchdb-config" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "$PROG: init: the config check failed" >&2
+    exit "$rc"
+  fi
+  info "init: done"
+}
+
+main() {
+  local cmd=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      --dry-run) dry_run=1; shift ;;
+      -*) usage >&2; echo "$PROG: unknown option: $1" >&2; exit 2 ;;
+      *) cmd="$1"; shift; break ;;
+    esac
+  done
+  case "$cmd" in
+    '') usage ;;
+    init) cmd_init "$@" ;;
+    *) usage >&2; echo "$PROG: unknown command: $cmd" >&2; exit 2 ;;
+  esac
+}
+
+main "$@"
