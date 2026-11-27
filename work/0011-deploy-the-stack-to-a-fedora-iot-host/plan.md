@@ -19,6 +19,7 @@ from: spec.md
 - `docs/decisions/0001-container-runtime-and-deployment.md` (edit) — dated amendment (2026-11-27, 0011) to the relative-paths compose rule: the bundle carries copies, and `check-quadlets` keeps them in sync.
 - `docs/decisions/0003-host-bundle-contract.md` (edit) — dated amendment raising the Podman floor from 5.0 to 5.5, with the dry-run evidence. Its health-check consequence is amended to point at 0017, which the owner chose over adding it here (2026-11-27).
 - `work/0011-deploy-the-stack-to-a-fedora-iot-host/plan.md` (edit) — tick steps as they land.
+- `work/0017-add-a-couchdb-health-check-and-notify-healthy-to/intent.md` (new, via `sdlc new --quick`) — the health check and `Notify=healthy` that ADR 0003 assigned to 0011, deferred by the owner (2026-11-27).
 
 ## Order of work
 - [x] 1. **Bundle copies.**
@@ -56,7 +57,7 @@ from: spec.md
   - Record `getenforce`, `uname -m` and `podman --version`.
   - Clean up: stop the unit, remove the test directory, run `daemon-reload` again, and `podman volume rm couchdb-data`.
   - First check that the local compose stack isn't running, because both bind `127.0.0.1:5984`, and that the local stack's volume isn't the one being removed.
-- [ ] 7. **Close out.** Run `sdlc verify` (full) and paste the summary line. Then run the `sdlc:verifier` agent and submit.
+- [x] 7. **Close out.** Run `sdlc verify` (full) and paste the summary line. Then run the `sdlc:verifier` agent and submit.
 
 ## Risks
 - **The riskiest step is 6**, the hand install. It runs on the Podman machine, where the local dev stack also lives. A rootless quadlet `couchdb.service` would collide with the compose stack on port 5984, and `podman volume rm couchdb-data` could hit the wrong volume if the compose stack uses the same name. Mitigations:
