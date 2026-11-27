@@ -92,7 +92,7 @@ The script stays bash with `set -euo pipefail`, shellcheck-clean, and keeps `--h
   - write a throwaway `couchdb.env` (mode 0600);
   - run `systemctl --user daemon-reload` and start `couchdb.service`.
 
-  Then `curl -fsS http://127.0.0.1:5984/_up` returns `ok`, and `scripts/check-couchdb-config` (given the throwaway credentials through `COUCHDB_USER` and `COUCHDB_PASSWORD`) prints no MISMATCH. The machine is arm64 with SELinux enforcing on Apple silicon. This is a stand-in for the real run in 0005, not a replacement.
+  Then an unauthenticated `curl http://127.0.0.1:5984/_up` returns 401, because the config sets `require_valid_user`, and `curl -fsS -K - http://127.0.0.1:5984/_up` with the throwaway credentials on stdin returns `ok`, and `scripts/check-couchdb-config` (given the throwaway credentials through `COUCHDB_USER` and `COUCHDB_PASSWORD`) prints no MISMATCH. The machine is arm64 with SELinux enforcing on Apple silicon. This is a stand-in for the real run in 0005, not a replacement.
 - AC10 (R10): README and ADR 0001 describe the bundle's copies and the sync check (code read).
 
 ## Open questions
