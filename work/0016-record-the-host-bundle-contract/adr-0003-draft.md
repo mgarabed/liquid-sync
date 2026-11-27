@@ -53,6 +53,16 @@ no manifest, no installer, and nothing that needs root.
 - **Boot:** each `.container` that should start at boot has
   `[Install] WantedBy=default.target`.
 - **Images:** pinned to a tag, never `latest`.
+- **Auto-update:**
+  - Set `AutoUpdate=registry` directly, never the `io.containers.autoupdate`
+    label through `Label=`. The host tool refuses a bundle that sets the
+    label.
+  - The pinned tag is one where a new image under that tag never needs a
+    data migration, because auto-update restarts the unit without running
+    `post-install`.
+  - Each auto-updated `.container` sets `Notify=healthy` with a health
+    check, so `podman auto-update` rolls back an image that comes up
+    unhealthy.
 
 ### Hooks
 
@@ -77,6 +87,9 @@ CouchDB admin password, arrives in an env file the host supplies.
   - no login shell;
   - lingering and a running user manager.
 - A restart of the units whenever an installed file changes.
+- `podman-auto-update.timer` for the service user, enabled on apply when
+  any quadlet sets `AutoUpdate=`, and disabled on removal if the host tool
+  enabled it. No hook touches the timer.
 - Named volumes that are kept when the stack is removed. Only an explicit
   purge deletes them.
 - Publishing: the host's own `tailscale serve` publishes `svc:liquid-sync`
@@ -91,6 +104,9 @@ CouchDB admin password, arrives in an env file the host supplies.
   (0011).
 - `check-quadlets` gains checks for the layout and the quadlet promises, on
   top of its podlet diff and dry-run (0011).
+- `couchdb.container` doesn't yet have a health check or `Notify=healthy`.
+  0011 adds them. Compose has no field for `Notify=`, so the podlet diff in
+  `check-quadlets` must allow for it (0011).
 - `liquid-sync init` splits into two paths (0012):
   - a host path, the `post-install` hook;
   - a local-dev path, which also generates env files and starts the stack.

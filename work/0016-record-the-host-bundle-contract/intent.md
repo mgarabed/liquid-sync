@@ -30,6 +30,7 @@ The host side has agreed a contract for how a stack is installed on the producti
   - component rows 3 and 9;
   - §5.3's "provision the new host (`deploy/`)";
   - the Phase 2 init line and the Phase 5 `deploy/` line.
+- Review round 1, agreed with the host side: the host tool enables `podman-auto-update.timer`, and no hook touches it. ADR 0003 and its draft gain the auto-update promises: `AutoUpdate=` only, never the label; a tag that never needs a data migration; and `Notify=healthy`. ADR 0001's two auto-update compose rules and its timer Consequence get dated notes.
 
 ## Affected users and systems
 Docs only: `docs/decisions/0001-container-runtime-and-deployment.md`, the new `docs/decisions/0003-host-bundle-contract.md`, `docs/project-plan.md`, and `README.md` if it describes deploying.

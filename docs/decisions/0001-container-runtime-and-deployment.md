@@ -121,9 +121,16 @@ Where the container definitions are kept (the source of truth):
 - [ ] Tags pinned to a minor version with amd64 and arm64 manifests
       (`couchdb:3.5`); never `latest`. `podman auto-update` follows the
       pinned tag, so patch releases arrive and minor upgrades are a commit.
+      Amended 2026-11-27 (0016): a new image under the pinned tag must never
+      need a data migration, because auto-update restarts the unit without
+      running the `post-install` hook
+      ([ADR 0003](0003-host-bundle-contract.md)).
 - [ ] Every service sets `labels: io.containers.autoupdate: registry`, which
       podlet maps to `AutoUpdate=registry`. Without it auto-update skips the
-      container.
+      container. Amended 2026-11-27 (0016): the quadlet carries
+      `AutoUpdate=registry`, never the label through `Label=`, which the
+      host tool refuses. Every auto-updated container also has a health
+      check and `Notify=healthy`, so a broken image is rolled back.
 - [ ] Every service sets `container_name:` and joins one named network
       declared under `networks:`. Services address each other only by
       `container_name`. Podlet maps these to `ContainerName=` and a
@@ -336,7 +343,8 @@ file using `${TAG}` (even with `TAG` set), `include`, `extends`, `build`,
   declares the quadlets, their config and the hooks; the host tool provides
   the user and lingering, writes `couchdb.env`, and installs the rest
   ([ADR 0003](0003-host-bundle-contract.md)).
-  `podman auto-update` runs as that user's `podman-auto-update.timer`.
+  `podman auto-update` runs as that user's `podman-auto-update.timer`,
+  which the host tool enables (amended 2026-11-27, 0016).
 - The stack needs no Tailscale container and no added capabilities. The
   host's tailscaled publishes `svc:liquid-sync` (homelab ADR 0005), so the
   earlier open question, whether `tailscale serve` works in a rootless
