@@ -2,7 +2,7 @@
 
 Status: accepted
 Date: 2026-11-27
-Work item: `work/0016-record-the-host-bundle-contract`
+Work item: `work/done/0016-record-the-host-bundle-contract`
 
 ## Context
 

@@ -2,7 +2,7 @@
 id: 0016
 title: Record the host bundle contract
 type: chore
-status: in-review
+status: merged
 risk: low
 tier: small
 priority: P2
@@ -13,6 +13,8 @@ pr: 9
 started: 2026-11-27T18:39:18+00:00
 submitted: 2026-11-27T18:41:33+00:00
 submitted_verify: full
+merged: 2026-11-27T19:29:04+00:00
+checks: none
 ---
 # Intent: Record the host bundle contract
 
