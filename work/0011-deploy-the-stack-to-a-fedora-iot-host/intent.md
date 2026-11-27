@@ -11,6 +11,7 @@ created: 2026-11-25
 branch: 
 pr: 
 source: 0006
+depends: 0016
 ---
 # Intent: Deploy the stack to a Fedora IoT host
 
