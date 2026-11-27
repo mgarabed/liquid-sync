@@ -2,17 +2,19 @@
 id: 0010
 title: Tailnet prerequisites provided by homelab ADR 0005
 type: chore
-status: building
+status: in-review
 risk: low
 tier: 
 priority: P2
 author: Mike Garabedian
 created: 2026-11-25
 branch: work/0010-prepare-the-tailnet-for-liquid-sync
-pr: 
+pr: 8
 source: 0005
 spec_hash: requirements=f49f8cce55a0;acceptance-criteria=b55ab3396673;areas-of-concern=3921a6d58d1d
 started: 2026-11-27T13:26:53+00:00
+submitted: 2026-11-27T13:31:42+00:00
+submitted_verify: full
 ---
 # Intent: Tailnet prerequisites provided by homelab ADR 0005
 
