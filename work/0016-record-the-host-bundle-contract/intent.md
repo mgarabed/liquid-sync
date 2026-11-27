@@ -2,14 +2,14 @@
 id: 0016
 title: Record the host bundle contract
 type: chore
-status: draft
+status: planned
 risk: low
-tier: 
+tier: small
 priority: P2
 author: Mike Garabedian
 created: 2026-11-27
-branch:
-pr:
+branch: 
+pr: 
 ---
 # Intent: Record the host bundle contract
 
