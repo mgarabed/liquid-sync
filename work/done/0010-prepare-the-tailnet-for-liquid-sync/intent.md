@@ -2,7 +2,7 @@
 id: 0010
 title: Tailnet prerequisites provided by homelab ADR 0005
 type: chore
-status: in-review
+status: merged
 risk: low
 tier: 
 priority: P2
@@ -15,6 +15,8 @@ spec_hash: requirements=f49f8cce55a0;acceptance-criteria=b55ab3396673;areas-of-c
 started: 2026-11-27T13:26:53+00:00
 submitted: 2026-11-27T13:31:42+00:00
 submitted_verify: full
+merged: 2026-11-27T13:45:46+00:00
+checks: none
 ---
 # Intent: Tailnet prerequisites provided by homelab ADR 0005
 

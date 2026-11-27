@@ -13,7 +13,7 @@ Docs only. The edits are already drafted and parked in the git stash `0010 docs:
 - `docs/project-plan.md` (edit): component 2 (Tailscale access) and component 9 (Pi deployment); 5.3 host migration; the Phase 1 env-file and HTTPS bullets; first step 4 (0010 R2). Added in review round 1: goal 5 and the Phase 5 migration drill drop the laptop → Pi move (a Mac can't host a Service), and Phase 1 and first step 4 name the Pi deploy (work item 0011) ahead of the HTTPS test (work item 0005).
 - `docs/decisions/0001-container-runtime-and-deployment.md` (edit): dated amendments covering the host description, the Rootless bullet, a new "Tailscale publishing" decision, the Tailscale compose rule and the userspace-serve Consequences bullet. Evidence is unchanged (0010 R3).
 - `docs/decisions/0002-archiver-approach.md` (edit): the memory-budget context changes to an 8 GB Pi 4, with a dated note that the budget is unchanged (0010 R4).
-- `work/0010-prepare-the-tailnet-for-liquid-sync/plan.md` (edit): steps ticked during the build.
+- `work/done/0010-prepare-the-tailnet-for-liquid-sync/plan.md` (edit): steps ticked during the build.
 
 ## Order of work
 - [x] 1. Apply the stash in the build worktree.
@@ -57,7 +57,7 @@ Docs only. The edits are already drafted and parked in the git stash `0010 docs:
 - AC7:
   - `git diff --stat main -- compose.yaml deploy/` prints nothing.
   - `ls *.env.example` prints only `couchdb.env.example`.
-- AC8: `grep -n '\[x\] Is the homelab policy file' work/0010-prepare-the-tailnet-for-liquid-sync/intent.md` shows the answer: dated 2026-11-26, citing homelab's passing policy tests, and naming 0011.
+- AC8: `grep -n '\[x\] Is the homelab policy file' work/done/0010-prepare-the-tailnet-for-liquid-sync/intent.md` shows the answer: dated 2026-11-26, citing homelab's passing policy tests, and naming 0011.
 - `sdlc verify` ends with `verify: PASS`.
 
 ## Parallel tracks
