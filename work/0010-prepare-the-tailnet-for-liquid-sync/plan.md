@@ -16,18 +16,18 @@ Docs only. The edits are already drafted and parked in the git stash `0010 docs:
 - `work/0010-prepare-the-tailnet-for-liquid-sync/plan.md` (edit): steps ticked during the build.
 
 ## Order of work
-- [ ] 1. Apply the stash in the build worktree.
+- [x] 1. Apply the stash in the build worktree.
   - Run `git stash list` to find the entry named `0010 docs: homelab ADR 0005 publishing model`, then `git stash apply stash@{N}` with its index.
   - If it doesn't apply cleanly, resolve the conflicts so that the spec's requirements hold. Only `work/` has changed on main since the stash was made, so a conflict is unlikely.
   - If the stash is missing, write the edits from the spec's Design section instead. Each requirement there is specific enough to do that.
   - Don't drop the stash yet.
-- [ ] 2. Check the four docs against the spec, and fix any gap in place.
+- [x] 2. Check the four docs against the spec, and fix any gap in place.
   - Run AC1 to AC4 (see Proof).
   - Read the diff for AC5. Every host and device is named generically (the Pi, the production Pi, the Service host, the owner's Mac and iPhone), and every tailnet DNS name is written as `<tailnet>.ts.net`. Never add a real machine name, device name or tailnet name, not even in a commit message.
   - Check that every amendment in ADR 0001 is dated "2026-11-26", to match homelab ADR 0005's acceptance date and the 0008 amendment style.
   - Check that the README diagram's box edges still line up.
-- [ ] 3. Run AC6 to AC8 against main's copies of `work/0005-*/intent.md` and `work/0010-*/intent.md`. These are confirmation only: the files were committed on main before this item and aren't part of this diff. Run AC7's `compose.yaml` and `deploy/` diff check, then `sdlc verify`.
-- [ ] 4. Commit the four docs together with this plan's ticks. Use the subject "Point docs at homelab ADR 0005 for Tailscale publishing", with a body that explains why: the sidecar design is dropped, and the publishing model is now Tailscale Services owned by the homelab repo. Then drop the stash entry with `git stash drop stash@{N}`, using the index from `git stash list`, after confirming it is the 0010 entry.
+- [x] 3. Run AC6 to AC8 against main's copies of `work/0005-*/intent.md` and `work/0010-*/intent.md`. These are confirmation only: the files were committed on main before this item and aren't part of this diff. Run AC7's `compose.yaml` and `deploy/` diff check, then `sdlc verify`.
+- [x] 4. Commit the four docs together with this plan's ticks. Use the subject "Point docs at homelab ADR 0005 for Tailscale publishing", with a body that explains why: the sidecar design is dropped, and the publishing model is now Tailscale Services owned by the homelab repo. Then drop the stash entry with `git stash drop stash@{N}`, using the index from `git stash list`, after confirming it is the 0010 entry.
 
 ## Risks
 - **Riskiest step: applying the stash (step 1).**

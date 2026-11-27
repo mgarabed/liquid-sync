@@ -9,9 +9,10 @@ Work item: `work/0006-decide-docker-vs-podman-for-local-development-ad`
 liquid-sync's reference production host is a Raspberry Pi 4 running
 [Fedora IoT](https://docs.fedoraproject.org/en-US/iot/), an image-based OS
 that runs workloads as containers under Podman and systemd. The owner's Pi is
-the 4 GB model, booting from a USB SSD, and it's shared with other homelab
-services, which live in a separate private repo. The dev machine is a Mac that already runs Colima with Docker for other
-projects. CLAUDE.md requires `compose.yaml` to work with both
+an 8 GB Pi 4 that boots from a USB flash drive, and it's shared with other
+homelab services, which live in a separate private repo. Amended 2026-11-26
+(0010): corrected the Pi's memory and boot drive. The dev machine is a Mac
+that already runs Colima with Docker for other projects. CLAUDE.md requires `compose.yaml` to work with both
 `docker compose` and `podman compose`.
 
 On Fedora IoT, the native way to run containers under systemd is
@@ -48,8 +49,9 @@ Where the container definitions are kept (the source of truth):
 
 ## Decision
 
-- **Production OS:** Fedora IoT on the Pi 4, booting from a USB SSD. Any Fedora
-  IoT host works; nothing in `deploy/` is specific to the Pi.
+- **Production OS:** Fedora IoT on the Pi 4, booting from a USB flash drive
+  (amended 2026-11-26, 0010). Any Fedora IoT host works; nothing in `deploy/`
+  is specific to the Pi.
 - **Rootless:** liquid-sync runs rootless, as a dedicated service user (no
   login shell, no sudo, no SSH keys) with lingering enabled ([`loginctl enable-linger`](https://www.freedesktop.org/software/systemd/man/latest/loginctl.html)),
   so its units start at boot without a login session. The quadlets go in that
@@ -61,10 +63,9 @@ Where the container definitions are kept (the source of truth):
   user owns. `deploy/` can then install and update them without root.
   Nothing in liquid-sync needs root. Rootless Podman can't bind ports below
   1024 ([rootless.md](https://github.com/containers/podman/blob/main/rootless.md)),
-  and liquid-sync doesn't need to. The Tailscale sidecar runs in userspace
-  networking, which is the image's default (`TS_USERSPACE` is "Enabled by
-  default"); only kernel mode needs `/dev/net/tun` and extra capabilities
-  ([Tailscale: Docker parameters](https://tailscale.com/docs/features/containers/docker/docker-params)).
+  and liquid-sync doesn't need to: the host's own tailscaled serves 443 (see
+  Tailscale publishing). Amended 2026-11-26 (0010): the Tailscale sidecar
+  that ran in userspace networking is dropped.
 - **Shared host and the homelab-repo split:** the Pi is shared with other
   homelab services. This repo owns only the liquid-sync stack: its quadlets,
   its service user, and its data covered by `backup`/`restore`. The host OS
@@ -93,6 +94,15 @@ Where the container definitions are kept (the source of truth):
   any other failure fails verify.
 - **Compose rules:** the checklist below. 0002 applies it line by line, and
   so does every later change to `compose.yaml`.
+- **Tailscale publishing:** amended 2026-11-26 after homelab ADR 0005, which
+  drops the Tailscale sidecar. liquid-sync is published as the Tailscale
+  Service `svc:liquid-sync` at `https://liquid-sync.<tailnet>.ts.net` on 443.
+  The host's own `tailscale serve` terminates TLS and forwards to
+  `127.0.0.1:5984`. The homelab repo owns publishing: which `tag:server`
+  hosts advertise the Service, the serve config, and the tailnet policy. The
+  stack runs no Tailscale container, and the liquid-sync service user never
+  controls tailscaled. A Mac signed in as a user can't host a Service, so
+  local development stays on localhost.
 - **Memory budget:** 1 GB for all liquid-sync containers together, set per
   service with `mem_limit:`, which podlet maps to quadlet `Memory=`. If Spike A
   (0007) picks the headless-Obsidian archiver, it must show the archiver fits
@@ -130,10 +140,11 @@ Where the container definitions are kept (the source of truth):
 - [ ] Host ports bind to loopback only (`127.0.0.1:<port>:<port>`), and only
       ports at 1024 or above.
 - [ ] A top-level `name:`, so the compose project name is stable.
-- [ ] The Tailscale sidecar uses `tailscale serve` only, never
-      `tailscale funnel`, which would put CouchDB on the public internet. Its
-      auth key is tagged, with a tailnet ACL limiting access to the CouchDB
-      port, and its state volume is treated as secret.
+- [ ] No Tailscale container, auth key or state volume. CouchDB binds to
+      `127.0.0.1` only, and the tailnet reaches it only through the host's
+      `tailscale serve` on `svc:liquid-sync`, never `tailscale funnel`. The
+      tailnet policy in the homelab repo limits access to 443 on
+      `svc:liquid-sync` (homelab ADR 0005). Amended 2026-11-26.
 
 ### Local development
 
@@ -314,10 +325,10 @@ file using `${TAG}` (even with `TAG` set), `include`, `extends`, `build`,
   quadlets, env file (0600) and config installed together in that user's
   `~/.config/containers/systemd/`, all declared in `deploy/`.
   `podman auto-update` runs as that user's `podman-auto-update.timer`.
-- The Tailscale sidecar runs in userspace mode with no added capabilities.
-  Tailscale's docs don't say whether `tailscale serve` works in userspace mode,
-  so 0002 must prove it. If it doesn't, kernel mode needs `/dev/net/tun` and
-  added capabilities under rootless Podman, and this ADR is revisited.
+- The stack needs no Tailscale container and no added capabilities. The
+  host's tailscaled publishes `svc:liquid-sync` (homelab ADR 0005), so the
+  earlier open question, whether `tailscale serve` works in a rootless
+  userspace sidecar, no longer applies. Amended 2026-11-26.
 - 0002 writes `compose.yaml` to the compose rules and the check script
   (regenerate, diff, `quadlet -dryrun -user`); 0008 adds the verify step that
   runs it, skipping with a warning when Podman is unavailable.

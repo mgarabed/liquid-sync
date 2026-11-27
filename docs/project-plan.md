@@ -35,14 +35,14 @@ every device, unlimited history, multiple vaults, and almost no upkeep.
 | # | Component | Purpose | Notes |
 |---|-----------|---------|-------|
 | 1 | **CouchDB** | Sync backend, one database per vault | `couchdb:3.5`, with the settings LiveSync needs (CORS, `max_document_size`, `max_http_request_size`, `require_valid_user`). Config in `config/*.ini`, copied into CouchDB's `local.d/` at start. |
-| 2 | **Tailscale access** | Stable private hostname plus HTTPS | `tailscale serve` → CouchDB. Use a dedicated node name (e.g. `liquid-sync`) through a Tailscale sidecar container, so the hostname moves with the stack instead of being tied to the laptop or the Pi. This is what makes host migration transparent. |
+| 2 | **Tailscale access** | Stable private hostname plus HTTPS | The Tailscale Service `svc:liquid-sync` at `https://liquid-sync.<tailnet>.ts.net` on 443. The host's own `tailscale serve` terminates TLS and forwards to CouchDB on `127.0.0.1:5984`. The homelab repo owns publishing: which `tag:server` hosts advertise the Service, the serve config, and the tailnet policy (homelab ADR 0005). The stack runs no Tailscale container. The hostname belongs to the Service, not a machine, which is what makes host migration transparent. A Mac signed in as a user can't host a Service, so local development stays on localhost. |
 | 3 | **Bootstrap CLI** (`./liquid-sync`) | Single entry point for setup and operations | Bash. Subcommands: `init`, `vault add/list/remove`, `setup-uri`, `migrate in/out`, `backup`, `restore`, `doctor`. Idempotent. |
 | 4 | **Archiver** | CouchDB → Markdown files → git commits | The LiveSync CLI follows the `_changes` feed of a one-way mirror of each vault database (`<vault>-archive`) and rebuilds files (LiveSync stores notes as chunks, encrypted when E2EE is on). A bash committer commits on a debounce (e.g. 10 minutes of quiet or hourly) and pushes to a private remote. See [ADR 0002](decisions/0002-archiver-approach.md). |
 | 5 | **Client settings presets** | Consistent LiveSync configuration on every device | Settings JSON per profile (`desktop`, `mobile`), encoded into the setup URI: sync mode, hidden-file sync, exclusions for large attachments on mobile. |
 | 6 | **Setup URI / QR generator** | Onboarding | Generate an encrypted LiveSync setup URI per vault (LiveSync ships a generator script) and print a terminal QR code for phones. |
 | 7 | **Backup / restore** | Disaster recovery and host moves | CouchDB data snapshot (or replication to a file/second CouchDB) plus archive repos. `restore` brings up a new host from a backup. |
 | 8 | **Health checks** (`doctor`) | Catch silent failures | TLS validity, CouchDB config drift, per-vault doc counts, archiver lag (time since last commit vs last change), last backup age. Later: alert through a push notification. |
-| 9 | **Pi deployment** (`deploy/`) | Production host | A liquid-sync stack for any Fedora IoT host (the Pi 4 on a USB SSD is the reference), run rootless as a dedicated service user; quadlets generated from `compose.yaml` by podlet; `podman auto-update`. The host OS and other services aren't in this repo. See [ADR 0001](decisions/0001-container-runtime-and-deployment.md). |
+| 9 | **Pi deployment** (`deploy/`) | Production host | A liquid-sync stack for any Fedora IoT host (a Pi 4 with 8 GB booting from a USB flash drive is the reference), run rootless as a dedicated service user; quadlets generated from `compose.yaml` by podlet; `podman auto-update`. The host OS and other services aren't in this repo. See [ADR 0001](decisions/0001-container-runtime-and-deployment.md). |
 
 ## 4. Key design decisions to make
 
@@ -121,9 +121,9 @@ The archive repo is the exit path: a plain Markdown vault plus full history.
 
 ### 5.3 Migrating the host (laptop → Pi, Pi → replacement)
 
-- Clients point at the Tailscale node name, not the machine. Move the Tailscale
-  node identity with the stack, or re-register the same node name on the new
-  host.
+- Clients point at the Tailscale Service `svc:liquid-sync`, not the machine.
+  Moving hosts means the homelab repo has the new host advertise the Service
+  and the old one stop (homelab ADR 0005).
 - Procedure: `backup` on the old host → provision the new host
   (`deploy/`) → `restore` → take the old host offline → `doctor`. Clients
   reconnect with no changes.
@@ -162,9 +162,9 @@ videos), and per-device names for conflict attribution.
 ### Phase 1 — Local stack, manual flow
 - `compose.yaml` with CouchDB 3.5 + `config/*.ini`
 - Per-service env files with committed examples: `couchdb.env.example` (admin
-  user/password), and later the vault list and the Tailscale auth key in their
-  own services' files
-- Tailscale sidecar + `tailscale serve` for HTTPS on a dedicated node name
+  user/password), and later the vault list in its own service's file
+- HTTPS through the Tailscale Service `svc:liquid-sync`, published by the
+  homelab repo (homelab ADR 0005); the iPhone test runs against the Pi
 - Manually connect one Mac and one iPhone to a **test** vault and confirm live
   sync both ways
 - ADR 0001: Docker vs Podman locally
@@ -210,8 +210,8 @@ videos), and per-device names for conflict attribution.
    them against the plugin's current docs.
 3. Create `test/fixtures/sample-vault/` with a few notes, an image and nested
    folders.
-4. Manually connect the Mac test vault over `localhost`, then add the Tailscale
-   sidecar and connect the iPhone over HTTPS.
+4. Manually connect the Mac test vault over `localhost`, then connect the Mac and
+   the iPhone over HTTPS through `svc:liquid-sync` on the Pi (0005).
 5. Start Spike A: look for a maintained LiveSync file-bridge or CLI before
    considering the other archiver options. Done: see
    [ADR 0002](decisions/0002-archiver-approach.md).

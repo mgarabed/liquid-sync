@@ -22,7 +22,7 @@ Self-hosted, low-maintenance sync and history for personal Obsidian vaults.
    Obsidian + Self-hosted LiveSync plugin
             │  HTTPS over Tailscale (stable MagicDNS name)
             ▼
- ┌──────────────────────────── host (laptop → Pi 4) ───┐
+ ┌──────────────────────────────── host (Pi 4) ────────┐
  │  tailscale serve ──► CouchDB (1 database per vault) │
  │                         │ _changes feed             │
  │                         ▼                           │
@@ -74,7 +74,7 @@ All operations go through one bootstrap script (not yet implemented):
 
 ```
 liquid-sync              # bootstrap/CLI script (bash)
-compose.yaml             # CouchDB + archiver (+ tailscale sidecar), docker or podman
+compose.yaml             # CouchDB + archiver, docker or podman
 config/                  # CouchDB *.ini (copied into local.d/), LiveSync presets
 archiver/                # CouchDB → files → git service
 deploy/quadlets/         # quadlet units generated from compose.yaml (Fedora IoT)
@@ -84,5 +84,8 @@ docs/                    # plan, runbooks, decision records
 ## Requirements
 
 - Docker or Podman with compose support
-- Tailscale account (HTTPS certificates enabled on the tailnet)
+- Tailscale account with MagicDNS and HTTPS certificates on. The owner's
+  deployment is published as the Tailscale Service `svc:liquid-sync` by a
+  separate homelab repo (homelab ADR 0005); the stack itself only binds
+  CouchDB to `127.0.0.1:5984`
 - Obsidian 1.7.2+ with Self-hosted LiveSync on each device
