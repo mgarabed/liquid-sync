@@ -2,18 +2,20 @@
 id: 0011
 title: Deploy the stack to a Fedora IoT host
 type: feature
-status: building
+status: in-review
 risk: low
 tier: standard
 priority: P2
 author: Mike Garabedian
 created: 2026-11-25
 branch: work/0011-deploy-the-stack-to-a-fedora-iot-host
-pr: 
+pr: 10
 source: 0006
 depends: 0016
 spec_hash: requirements=86e94cc14441;acceptance-criteria=fd4f8e406cfd;areas-of-concern=c2d88599546c
 started: 2026-11-27T20:02:25+00:00
+submitted: 2026-11-27T20:16:44+00:00
+submitted_verify: full
 ---
 # Intent: Deploy the stack to a Fedora IoT host
 
