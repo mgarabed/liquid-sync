@@ -12,7 +12,7 @@ branch: work/0011-deploy-the-stack-to-a-fedora-iot-host
 pr: 
 source: 0006
 depends: 0016
-spec_hash: requirements=86e94cc14441;acceptance-criteria=dd651c4a7432;areas-of-concern=c2d88599546c
+spec_hash: requirements=86e94cc14441;acceptance-criteria=fd4f8e406cfd;areas-of-concern=c2d88599546c
 started: 2026-11-27T20:02:25+00:00
 ---
 # Intent: Deploy the stack to a Fedora IoT host
