@@ -226,6 +226,8 @@ __marimo__/
 .env
 *.env
 !*.env.example
+# liquid-sync init's temp file while it writes couchdb.env
+.couchdb.env.*
 *.setup-uri
 secrets/
 

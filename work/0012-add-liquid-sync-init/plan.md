@@ -36,7 +36,7 @@ from: spec.md
   - The lib sets nothing at source time apart from functions, and starts with a guard against being executed directly. Callers source it with a `# shellcheck source=lib/common.sh` directive above the `source "$root/lib/common.sh"` line, because `shellcheck -x` can't follow a non-constant path.
   - In `check-couchdb-config`, keep the prefix `check-couchdb-config:` on its `die` messages by setting `PROG` before sourcing.
   - Re-run `--help`, the unknown argument and the fake-credentials case with the worktree's copy, and `diff` them against step 1's output; they must be identical. The fake-credentials case exercises the moved curl path early. The normal run is compared in step 6, once init has the stack up. Run `sdlc verify --fast`.
-- [ ] 3. **Write the tests first:** `test/liquid-sync-init.sh`.
+- [x] 3. **Write the tests first:** `test/liquid-sync-init.sh`.
   - Use `mktemp -d` under `/tmp`, guarded like `check-quadlets`' `assert_tmp`. Copy `liquid-sync`, `lib/` and `scripts/check-couchdb-config` in, plus a fake `couchdb.env.example` (`COUCHDB_USER=admin`, `COUCHDB_PASSWORD=`, one comment line).
   - Add a stub `PODMAN`: a script that appends its argv to `calls.log` and exits 0.
   - Set `COUCHDB_URL=http://127.0.0.1:9` (a closed port) and `LIQUID_SYNC_TIMEOUT=3`.
@@ -48,7 +48,7 @@ from: spec.md
     - AC5: `--dry-run` creates no file and makes no stub call.
     - AC7: the timeout fires in under 10 s, with the URL in the message and no canary.
   - Each case prints `ok <name>` or `FAIL <name>: why`, and the script exits 1 on any FAIL. Commit it along with step 4. Running it now fails, because `liquid-sync` doesn't exist yet.
-- [ ] 4. **`liquid-sync` and `cmd_init`,** following the 0012 spec's Design:
+- [x] 4. **`liquid-sync` and `cmd_init`,** following the 0012 spec's Design:
   - Parse flags: `--help`, `-h` and `--dry-run` work anywhere after the subcommand, and `--help` also works before it. No arguments prints the help.
   - Env step: `[ -e ]` check, then the mode check with a portable `stat`: `stat -f %Lp` on macOS, `stat -c %a` on Linux, picked by trying one and falling back. Then generation under a `umask 077` subshell, writing a `mktemp "$root/.couchdb.env.XXXXXX"` file, then `ln` into place and `rm` the temp. A trap removes the temp file on error.
   - Then the compose up, the wait and the drift check.
