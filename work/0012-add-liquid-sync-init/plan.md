@@ -19,14 +19,16 @@ from: spec.md
 - `work/0012-add-liquid-sync-init/plan.md` (edit) — tick steps as they land.
 
 ## Order of work
-- [ ] 1. **Record a baseline for `check-couchdb-config`.** The build runs in `.worktrees/0012`, which has no git-ignored env file. So capture stdout, stderr and exit code from the **main checkout's** copy, by absolute path (`/Users/mike/src/liquid-sync/scripts/check-couchdb-config`):
+- [x] 1. **Record a baseline for `check-couchdb-config`.** The build runs in `.worktrees/0012`, which has no git-ignored env file. So capture stdout, stderr and exit code from the **main checkout's** copy, by absolute path (`/Users/mike/src/liquid-sync/scripts/check-couchdb-config`):
   - a normal run against the local stack (it reads its own env file, and its output has no secrets);
   - `--help`;
   - an unknown argument;
   - fake `COUCHDB_USER=x COUCHDB_PASSWORD=y`, which expects the 401 message.
 
   Save them under `/tmp/0012-baseline/` for 0012 AC8. If the stack isn't up, ask the user to start it from the main checkout. Nothing is committed in this step.
-- [ ] 2. **`lib/common.sh`, and move `check-couchdb-config` onto it.**
+
+  *As built:* the main checkout had no `couchdb.env` and no stack was running, so only `--help`, the unknown argument and fake credentials with no stack (`can't reach CouchDB`) could be captured here. The normal run and the 401 case moved to step 6: `main`'s copy of the script goes into `/tmp/0012-baseline/tree/scripts/`, beside a copy of `config/` and a symlink to the worktree's `couchdb.env`, so it reads the same env file and config as the worktree's copy.
+- [x] 2. **`lib/common.sh`, and move `check-couchdb-config` onto it.**
   - Move `die`, `env_value`, `escape` and `curl_auth` as they are into the lib. `env_value` takes the file as its first argument, and `curl_auth_line USER PASS` returns the line.
   - Add `couch_get URL PATH [curl args]`, which sends credentials on curl's stdin (`--config -`), with `--max-time 10`.
   - Add `podman_bin`, which echoes `$PODMAN`, else `podman` on `PATH`, else `/opt/podman/bin/podman`.

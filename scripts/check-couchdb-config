@@ -25,7 +25,10 @@ never appear in argv or in this script's output.
 EOF
 }
 
-die() { echo "check-couchdb-config: $*" >&2; exit 1; }
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+PROG=check-couchdb-config
+# shellcheck source=lib/common.sh
+source "$root/lib/common.sh"
 
 for arg in "$@"; do
   case "$arg" in
@@ -36,45 +39,27 @@ done
 
 command -v curl >/dev/null 2>&1 || die "curl not found"
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 ENV_FILE="$root/couchdb.env"
 url="${COUCHDB_URL:-http://127.0.0.1:5984}"
 url="${url%/}"
-
-# Print the value of KEY from couchdb.env without sourcing the file.
-env_value() {
-  local line
-  line="$(grep -E "^$1=" "$ENV_FILE" | tail -n 1)" || return 1
-  line="${line#*=}"
-  # Strip one pair of surrounding quotes, as compose's env_file does.
-  case "$line" in
-    \"*\") line="${line:1:${#line}-2}" ;;
-    \'*\') line="${line:1:${#line}-2}" ;;
-  esac
-  printf '%s' "$line"
-}
 
 user="${COUCHDB_USER:-}"
 pass="${COUCHDB_PASSWORD:-}"
 if [ -z "$user" ] || [ -z "$pass" ]; then
   [ -r "$ENV_FILE" ] \
     || die "set COUCHDB_USER and COUCHDB_PASSWORD, or create $ENV_FILE"
-  user="$(env_value COUCHDB_USER)" || die "COUCHDB_USER not found in $ENV_FILE"
-  pass="$(env_value COUCHDB_PASSWORD)" || die "COUCHDB_PASSWORD not found in $ENV_FILE"
+  user="$(env_value "$ENV_FILE" COUCHDB_USER)" || die "COUCHDB_USER not found in $ENV_FILE"
+  pass="$(env_value "$ENV_FILE" COUCHDB_PASSWORD)" || die "COUCHDB_PASSWORD not found in $ENV_FILE"
 fi
 [ -n "$user" ] && [ -n "$pass" ] || die "COUCHDB_USER or COUCHDB_PASSWORD is empty in the environment and $ENV_FILE"
 
-# A curl config line holding the credentials. Backslashes and double quotes
-# are escaped for curl's quoted-string syntax.
-escape() { local s="${1//\\/\\\\}"; printf '%s' "${s//\"/\\\"}"; }
-curl_auth="user = \"$(escape "$user"):$(escape "$pass")\""
+COUCH_AUTH="$(curl_auth_line "$user" "$pass")"
 
 # GET a config value. Prints the response body, then the HTTP status on its
-# own last line. Credentials go to curl on stdin (--config -), never in argv.
-# stdin is redirected per call so curl can't consume the ini loop's input.
+# own last line. stdin is redirected per call so curl can't consume the ini
+# loop's input.
 get_config() {
-  printf '%s\n' "$curl_auth" \
-    | curl -sS --max-time 10 --config - -w '\n%{http_code}' "$url/_node/_local/_config/$1/$2"
+  couch_get "$url" "/_node/_local/_config/$1/$2" -w '\n%{http_code}'
 }
 
 # Decode a flat JSON string ("...") into its raw value. Config values have no
