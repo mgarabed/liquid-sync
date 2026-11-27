@@ -21,7 +21,8 @@ every device, unlimited history, multiple vaults, and almost no upkeep.
 4. **Safe migrations in both directions**: in from Obsidian Sync, iCloud, git or
    a plain folder; out to plain files, git or another service, at any time.
 5. **No pets**: the host is disposable. It's rebuilt from this repo plus a data
-   backup, and moving from laptop to Pi 4 needs no client changes.
+   backup, and moving to a new host (the Pi → a replacement) needs no client
+   changes.
 6. **Private**: Tailscale only, valid HTTPS, LiveSync E2EE on.
 
 ### Non-goals (for now)
@@ -119,8 +120,11 @@ The archive repo is the exit path: a plain Markdown vault plus full history.
 - **Decommission:** export, verify, then `vault remove` deletes the database
   (with confirmation), and the archive repo is kept.
 
-### 5.3 Migrating the host (laptop → Pi, Pi → replacement)
+### 5.3 Migrating the host (Pi → replacement)
 
+- The dev stack on the Mac is only reachable on `localhost`, because a Mac
+  signed in as a user can't host a Service. So there's no laptop → Pi move:
+  clients switch to `svc:liquid-sync` once, when the Pi first publishes it.
 - Clients point at the Tailscale Service `svc:liquid-sync`, not the machine.
   Moving hosts means the homelab repo has the new host advertise the Service
   and the old one stop (homelab ADR 0005).
@@ -164,7 +168,9 @@ videos), and per-device names for conflict attribution.
 - Per-service env files with committed examples: `couchdb.env.example` (admin
   user/password), and later the vault list in its own service's file
 - HTTPS through the Tailscale Service `svc:liquid-sync`, published by the
-  homelab repo (homelab ADR 0005); the iPhone test runs against the Pi
+  homelab repo (homelab ADR 0005). The iPhone test runs against the Pi, so the
+  stack is deployed there first (work item 0011), ahead of the rest of
+  Phase 5's `deploy/` work
 - Manually connect one Mac and one iPhone to a **test** vault and confirm live
   sync both ways
 - ADR 0001: Docker vs Podman locally
@@ -194,7 +200,8 @@ videos), and per-device names for conflict attribution.
 - `backup` / `restore` and a scheduled backup
 - `deploy/`: a liquid-sync stack for any Fedora IoT host, run rootless;
   quadlets generated from `compose.yaml` by podlet; `podman auto-update`
-- Host migration drill: laptop → Pi using `restore`, with no client changes
+- Host migration drill: the Pi → a replacement Service host using `restore`,
+  with no client changes
 - Migrate the remaining vaults
 
 ### Phase 6 — Polish
@@ -210,8 +217,9 @@ videos), and per-device names for conflict attribution.
    them against the plugin's current docs.
 3. Create `test/fixtures/sample-vault/` with a few notes, an image and nested
    folders.
-4. Manually connect the Mac test vault over `localhost`, then connect the Mac and
-   the iPhone over HTTPS through `svc:liquid-sync` on the Pi (0005).
+4. Manually connect the Mac test vault over `localhost`. Then deploy the stack to
+   the Pi (work item 0011) and connect the Mac and the iPhone over HTTPS
+   through `svc:liquid-sync` (work item 0005).
 5. Start Spike A: look for a maintained LiveSync file-bridge or CLI before
    considering the other archiver options. Done: see
    [ADR 0002](decisions/0002-archiver-approach.md).
