@@ -35,7 +35,7 @@ from: spec.md
   - (i): `WantedBy=default.target` must sit under `[Install]`. Track the section header with awk.
 
   Check mode runs it on `deploy/quadlets/` and adds `lint` to `failed`. Add `--lint-only <dir>`, which runs only the lint, before the Podman availability check, and exits. Update `--help`.
-- [ ] 3. **Lint tests.** `scripts/test-check-quadlets` copies `deploy/quadlets/` into a `mktemp -d` under `/tmp` (guarded like `assert_tmp`).
+- [x] 3. **Lint tests.** `scripts/test-check-quadlets` copies `deploy/quadlets/` into a `mktemp -d` under `/tmp` (guarded like `assert_tmp`).
   - For each rule it applies one mutation, runs `scripts/check-quadlets --lint-only`, and asserts exit 1 plus the rule's message.
   - It also checks that the unmutated copy passes.
   - Wire it into `check-quadlets`. Before the Podman availability check, the normal run (check mode and `--write`, never `--lint-only`, which would recurse) runs `"$root/scripts/test-check-quadlets"`. A failure adds `lint-tests` to the failures and fails the run, even when Podman is missing: the 0008 R3/R4 skip covers only Podman being unavailable, and these tests don't need Podman. On a SKIPPED run, the SKIPPED line still prints and the lint tests' own `ok` lines show that they ran.

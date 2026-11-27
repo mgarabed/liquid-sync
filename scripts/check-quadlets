@@ -171,17 +171,25 @@ podman_unavailable_reason() {
   fi
 }
 
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+committed="$root/deploy/quadlets"
+
+failed=()
+
+# The lint's own tests need no Podman, so they run (and can fail the check)
+# even when the Podman part is skipped below. Never from --lint-only, which
+# the tests call: that would recurse.
+"$root/scripts/test-check-quadlets" || failed+=(lint-tests)
+
 # Runs before any staging, so a skip creates nothing.
 if reason="$(podman_unavailable_reason)"; then
+  [ "${#failed[@]}" -eq 0 ] || die "FAILED: ${failed[*]} (and $reason)"
   if [ "$skip_if_no_podman" -eq 1 ]; then
     echo "check-quadlets: SKIPPED — $reason; the quadlet check did not run" >&2
     exit 0
   fi
   die "$reason"
 fi
-
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-committed="$root/deploy/quadlets"
 
 # Both rm -rf calls below check their target first, so an empty or wrong
 # variable can't point them anywhere else.
@@ -251,8 +259,6 @@ fi
 # example is copied by its own name; the staged couchdb.env never enters out/.
 cp -R "$tmp/src/config" "$tmp/src/out/config"
 cp "$root/couchdb.env.example" "$tmp/src/out/couchdb.env.example"
-
-failed=()
 
 if [ "$write" -eq 1 ]; then
   assert_committed
