@@ -13,8 +13,7 @@ Usage: ./liquid-sync [--dry-run] <command> [options]
        ./liquid-sync <command> --help
 
 Commands:
-  init      Create couchdb.env if it's missing, start the local stack, wait
-            for CouchDB and check its config for drift.
+  init      Set up couchdb.env, start the local stack and check CouchDB.
 
 Options:
   --dry-run Show what would change, and change nothing.
