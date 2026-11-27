@@ -38,6 +38,7 @@ A Mac signed in as a user can't host a Service, so local development stays on lo
 ## Constraints
 - This repo never runs `tailscale` and never controls tailscaled. The liquid-sync service user holds no Tailscale credentials. Publishing belongs to the homelab repo.
 - CouchDB stays bound to loopback on the host. The tailnet reaches it only through the host's `tailscale serve` on `svc:liquid-sync`. There is no Funnel.
+- No sidecar. Under the host bundle contract (ADR 0003, added by 0016), the stack exposes only `127.0.0.1:5984`, and the host publishes `svc:liquid-sync`.
 - No secret (CouchDB credentials, setup URI) appears in logs, the runbook or commits. The runbook writes the tailnet name as `<tailnet>`.
 - Test against the throwaway vault only, never a real vault. No step may risk data on a client device.
 

@@ -37,13 +37,13 @@ every device, unlimited history, multiple vaults, and almost no upkeep.
 |---|-----------|---------|-------|
 | 1 | **CouchDB** | Sync backend, one database per vault | `couchdb:3.5`, with the settings LiveSync needs (CORS, `max_document_size`, `max_http_request_size`, `require_valid_user`). Config in `config/*.ini`, copied into CouchDB's `local.d/` at start. |
 | 2 | **Tailscale access** | Stable private hostname plus HTTPS | The Tailscale Service `svc:liquid-sync` at `https://liquid-sync.<tailnet>.ts.net` on 443. The host's own `tailscale serve` terminates TLS and forwards to CouchDB on `127.0.0.1:5984`. The homelab repo owns publishing: which `tag:server` hosts advertise the Service, the serve config, and the tailnet policy (homelab ADR 0005). The stack runs no Tailscale container. The hostname belongs to the Service, not a machine, which is what makes host migration transparent. A Mac signed in as a user can't host a Service, so local development stays on localhost. |
-| 3 | **Bootstrap CLI** (`./liquid-sync`) | Single entry point for setup and operations | Bash. Subcommands: `init`, `vault add/list/remove`, `setup-uri`, `migrate in/out`, `backup`, `restore`, `doctor`. Idempotent. |
+| 3 | **Bootstrap CLI** (`./liquid-sync`) | Single entry point for setup and operations | Bash. Subcommands: `init`, `vault add/list/remove`, `setup-uri`, `migrate in/out`, `backup`, `restore`, `doctor`. Idempotent. On a host, `init` runs as the bundle's `post-install` hook ([ADR 0003](decisions/0003-host-bundle-contract.md)). |
 | 4 | **Archiver** | CouchDB → Markdown files → git commits | The LiveSync CLI follows the `_changes` feed of a one-way mirror of each vault database (`<vault>-archive`) and rebuilds files (LiveSync stores notes as chunks, encrypted when E2EE is on). A bash committer commits on a debounce (e.g. 10 minutes of quiet or hourly) and pushes to a private remote. See [ADR 0002](decisions/0002-archiver-approach.md). |
 | 5 | **Client settings presets** | Consistent LiveSync configuration on every device | Settings JSON per profile (`desktop`, `mobile`), encoded into the setup URI: sync mode, hidden-file sync, exclusions for large attachments on mobile. |
 | 6 | **Setup URI / QR generator** | Onboarding | Generate an encrypted LiveSync setup URI per vault (LiveSync ships a generator script) and print a terminal QR code for phones. |
 | 7 | **Backup / restore** | Disaster recovery and host moves | CouchDB data snapshot (or replication to a file/second CouchDB) plus archive repos. `restore` brings up a new host from a backup. |
 | 8 | **Health checks** (`doctor`) | Catch silent failures | TLS validity, CouchDB config drift, per-vault doc counts, archiver lag (time since last commit vs last change), last backup age. Later: alert through a push notification. |
-| 9 | **Pi deployment** (`deploy/`) | Production host | A liquid-sync stack for any Fedora IoT host (a Pi 4 with 8 GB booting from a USB flash drive is the reference), run rootless as a dedicated service user; quadlets generated from `compose.yaml` by podlet; `podman auto-update`. The host OS and other services aren't in this repo. See [ADR 0001](decisions/0001-container-runtime-and-deployment.md). |
+| 9 | **Pi deployment** (`deploy/`) | Production host | A liquid-sync stack for any Fedora IoT host (a Pi 4 with 8 GB booting from a USB flash drive is the reference), run rootless as a dedicated service user; quadlets generated from `compose.yaml` by podlet; `podman auto-update`. `deploy/` is a bundle shipped at a git tag: `deploy/quadlets/` plus optional `deploy/hooks/`. A host tool owned outside this repo provides the service user and `couchdb.env`, installs the bundle and runs the hooks. The host OS and other services aren't in this repo. See [ADR 0001](decisions/0001-container-runtime-and-deployment.md) and [ADR 0003](decisions/0003-host-bundle-contract.md). |
 
 ## 4. Key design decisions to make
 
@@ -129,9 +129,10 @@ The archive repo is the exit path: a plain Markdown vault plus full history.
 - Clients point at the Tailscale Service `svc:liquid-sync`, not the machine.
   Moving hosts means the homelab repo has the new host advertise the Service
   and the old one stop (homelab ADR 0005).
-- Procedure: `backup` on the old host → provision the new host
-  (`deploy/`) → `restore` → take the old host offline → `doctor`. Clients
-  reconnect with no changes.
+- Procedure: `backup` on the old host → the host tool installs the bundle
+  on the new host ([ADR 0003](decisions/0003-host-bundle-contract.md)) →
+  `restore` → take the old host offline → `doctor`. Clients reconnect with
+  no changes.
 - Alternative with no downtime: CouchDB replication from the old host to the
   new one, then cut the hostname over.
 - Also a migration: **LiveSync plugin and CouchDB upgrades.** Pin versions,
@@ -177,8 +178,10 @@ videos), and per-device names for conflict attribution.
 - ADR 0001: Docker vs Podman locally
 
 ### Phase 2 — Bootstrap CLI
-- `liquid-sync init`: generate the per-service `*.env` files, start the stack, apply CouchDB config
-  through its HTTP API (idempotent), wait for health
+- `liquid-sync init`: wait for health, then apply CouchDB config through its HTTP API
+  (idempotent). Locally it first generates the per-service `*.env` files and starts the
+  stack; on a host it runs as the bundle's `post-install` hook, and the host tool supplies
+  the env files (ADR 0003, work item 0012)
 - `vault add/list/remove`: create the database and its user/permissions
 - `setup-uri`: generate the encrypted URI and a terminal QR code
 - `doctor` v1
@@ -199,8 +202,9 @@ videos), and per-device names for conflict attribution.
 
 ### Phase 5 — Backup / restore and the Pi
 - `backup` / `restore` and a scheduled backup
-- `deploy/`: a liquid-sync stack for any Fedora IoT host, run rootless;
-  quadlets generated from `compose.yaml` by podlet; `podman auto-update`.
+- `deploy/`: the liquid-sync bundle for any Fedora IoT host, run rootless and
+  installed by the host tool (ADR 0003); quadlets generated from `compose.yaml`
+  by podlet; `podman auto-update`; `backup`/`restore` hooks.
   Work item 0011 first deploys the stack to the Pi, in Phase 1
 - Host migration drill: the Pi → a replacement Service host using `restore`,
   with no client changes
