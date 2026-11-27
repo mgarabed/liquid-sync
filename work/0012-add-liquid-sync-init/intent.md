@@ -2,17 +2,19 @@
 id: 0012
 title: Add liquid-sync init
 type: feature
-status: building
+status: in-review
 risk: low
 tier: standard
 priority: P2
 author: Mike Garabedian
 created: 2026-11-26
 branch: work/0012-add-liquid-sync-init
-pr: 
+pr: 11
 depends: 0011, 0016
 spec_hash: requirements=a96dbcc7434e;acceptance-criteria=1ebe87a83b00;areas-of-concern=075a41132a33
 started: 2026-11-27T22:46:05+00:00
+submitted: 2026-11-27T23:08:42+00:00
+submitted_verify: full
 ---
 # Intent: Add liquid-sync init
 
