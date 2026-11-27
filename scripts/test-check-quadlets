@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+# Negative tests for the bundle lint in scripts/check-quadlets (0011 AC4): each
+# case breaks one ADR 0003 rule in a temp copy of deploy/quadlets/ and expects
+# `check-quadlets --lint-only` to exit 1 with that rule's message. The
+# unmutated copy must pass. Needs no Podman.
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/test-check-quadlets [--help]
+
+Runs the negative tests for the check-quadlets bundle lint against temp copies
+of deploy/quadlets/. Prints one "ok" line per case; exits 1 if any case fails.
+scripts/check-quadlets runs this on every normal run.
+EOF
+}
+
+case "${1:-}" in
+  "") ;;
+  -h|--help) usage; exit 0 ;;
+  *) usage >&2; echo "test-check-quadlets: unknown argument: $1" >&2; exit 1 ;;
+esac
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+check="$root/scripts/check-quadlets"
+bundle="$root/deploy/quadlets"
+
+tmp_root="$(cd /tmp && pwd -P)"
+tmp="$(mktemp -d "$tmp_root/test-check-quadlets.XXXXXX")"
+tmp="$(cd "$tmp" && pwd -P)"
+
+# rm -rf only ever targets this script's own temp dir under /tmp.
+assert_tmp() {
+  case "$tmp" in
+    "$tmp_root"/test-check-quadlets.??????)
+      [ -d "$tmp" ] && [ ! -L "$tmp" ] && return 0 ;;
+  esac
+  echo "test-check-quadlets: refusing to remove '$tmp'" >&2
+  exit 1
+}
+assert_tmp
+cleanup() { assert_tmp && rm -rf "$tmp"; }
+trap cleanup EXIT
+
+n=0
+failures=0
+case_dir=
+
+# Starts a case with a fresh copy of the committed bundle in $case_dir.
+fresh() {
+  n=$((n + 1))
+  case_dir="$tmp/case$n"
+  mkdir "$case_dir"
+  cp -R "$bundle/." "$case_dir/"
+}
+
+# Rewrites a file through a sed expression (portable: no sed -i).
+edit() {
+  sed "$2" "$case_dir/$1" >"$case_dir/$1.new"
+  mv "$case_dir/$1.new" "$case_dir/$1"
+}
+
+# Inserts a line right after a section header in a unit file.
+add_to_section() {
+  awk -v sec="$2" -v line="$3" '{ print } $0 == sec { print line }' \
+    "$case_dir/$1" >"$case_dir/$1.new"
+  mv "$case_dir/$1.new" "$case_dir/$1"
+}
+
+# expect_fail <name> <message substring>: the lint must exit 1 and print it.
+expect_fail() {
+  local out rc=0
+  out="$("$check" --lint-only "$case_dir" 2>&1)" || rc=$?
+  if [ "$rc" -eq 1 ] && grep -qF -- "$2" <<<"$out"; then
+    echo "ok - $1"
+  else
+    echo "not ok - $1 (exit $rc, wanted 1 and '$2'):" >&2
+    printf '%s\n' "$out" >&2
+    failures=$((failures + 1))
+  fi
+}
+
+# When the committed bundle itself breaks a rule, this case fails along with
+# check-quadlets' own lint of it, so one defect shows up as both lint-tests and
+# lint. That's expected: the case proves the lint passes a good bundle.
+fresh
+if out="$("$check" --lint-only "$case_dir" 2>&1)"; then
+  echo "ok - 0011 AC4: the committed bundle passes the lint"
+else
+  echo "not ok - 0011 AC4: the committed bundle fails the lint:" >&2
+  printf '%s\n' "$out" >&2
+  failures=$((failures + 1))
+fi
+
+fresh; mkdir "$tmp/empty"; case_dir="$tmp/empty"
+expect_fail "0011 R5: a bundle with no .container unit" "(bundle): no .container unit"
+
+fresh; mkdir "$case_dir/couchdb.container.d"
+printf '[Container]\nPodmanArgs=--privileged\n' >"$case_dir/couchdb.container.d/10-override.conf"
+expect_fail "0011 R5(d): PodmanArgs= in a drop-in" "couchdb.container.d/10-override.conf: PodmanArgs= not allowed"
+
+fresh; mkdir "$case_dir/network.d"
+printf '[Network]\nDriver=macvlan\n' >"$case_dir/network.d/10-driver.conf"
+expect_fail "0011 R5(f): Driver= in a .network drop-in" "network.d/10-driver.conf: Driver= not allowed"
+
+fresh; edit couchdb.container 's/^PublishPort=.*/PublishPort=\\/'
+add_to_section couchdb.container "PublishPort=\\" '  0.0.0.0:5984:5984'
+expect_fail "0011 R5(c): PublishPort= split over a continuation line" "couchdb.container: PublishPort=0.0.0.0:5984:5984 not allowed"
+
+fresh
+rc=0; out="$("$check" --write --lint-only "$case_dir" 2>&1)" || rc=$?
+if [ "$rc" -eq 1 ] && grep -qF -- "can't be combined with --write" <<<"$out"; then
+  echo "ok - --write with --lint-only is refused"
+else
+  echo "not ok - --write with --lint-only (exit $rc):" >&2; printf '%s\n' "$out" >&2
+  failures=$((failures + 1))
+fi
+
+fresh; ln -s couchdb.container "$case_dir/link.ini"
+expect_fail "0011 R5(a): symlink" "link.ini: not a regular file or directory"
+
+fresh; mkfifo "$case_dir/pipe"
+expect_fail "0011 R5(a): fifo" "pipe: not a regular file or directory"
+
+fresh; printf '[Kube]\nYaml=x.yaml\n' >"$case_dir/stack.kube"
+expect_fail "0011 R5(b): .kube unit" "stack.kube: unit type not allowed"
+
+fresh; touch "$case_dir/config/notes.image"
+expect_fail "0011 R5(b): non-unit file with a unit extension" "config/notes.image: unit type not allowed"
+
+fresh; edit couchdb.container 's/^PublishPort=.*/PublishPort=0.0.0.0:5984:5984/'
+expect_fail "0011 R5(c): port on all interfaces" "couchdb.container: PublishPort=0.0.0.0:5984:5984 not allowed"
+
+fresh; add_to_section couchdb.container '[Container]' 'PublishPort=127.0.0.1:5984:5984'
+expect_fail "0011 R5(c): more than one PublishPort=" "2 PublishPort= lines (only one allowed)"
+
+fresh; add_to_section couchdb.container '[Container]' 'PodmanArgs=--privileged'
+expect_fail "0011 R5(d): PodmanArgs=" "couchdb.container: PodmanArgs= not allowed"
+
+fresh; edit couchdb.container 's/^Network=.*/Network=host/'
+expect_fail "0011 R5(e): Network=host" "couchdb.container: Network=host not allowed"
+
+fresh; edit couchdb.container 's/^Network=.*/Network=other.network/'
+expect_fail "0011 R5(e): Network= names a missing .network" "Network=other.network not allowed (no such .network file"
+
+fresh; mv "$case_dir/liquid-sync.network" "$case_dir/config/"
+expect_fail "0011 R5(e): .network outside the bundle's top level" "Network=liquid-sync.network not allowed (no such .network file"
+
+fresh; edit couchdb.container 's/^Network=.*/Network=*.network/'
+expect_fail "0011 R5(e): Network= glob" "Network=*.network not allowed (no such .network file"
+
+fresh; add_to_section liquid-sync.network '[Network]' 'Driver=macvlan'
+expect_fail "0011 R5(f): Driver= in .network" "liquid-sync.network: Driver= not allowed"
+
+fresh; add_to_section liquid-sync.network '[Network]' 'NetworkInterface=eth0'
+expect_fail "0011 R5(f): NetworkInterface= in .network" "liquid-sync.network: NetworkInterface= not allowed"
+
+fresh; add_to_section liquid-sync.network '[Network]' 'Options=isolate=true'
+expect_fail "0011 R5(f): Options= in .network" "liquid-sync.network: Options= not allowed"
+
+fresh; edit couchdb.container 's|^EnvironmentFile=.*|EnvironmentFile=/etc/secrets.env|'
+expect_fail "0011 R5(g): other EnvironmentFile=" "couchdb.container: EnvironmentFile=/etc/secrets.env not allowed"
+
+fresh; printf '[Volume]\nDriver=local\n' >"$case_dir/data.volume"
+expect_fail "0011 R5(h): .volume without VolumeName=" "data.volume: missing VolumeName="
+
+fresh; edit couchdb.container '/^WantedBy=/d'
+expect_fail "0011 R5(i): no WantedBy=" "couchdb.container: missing WantedBy=default.target under [Install]"
+
+fresh; edit couchdb.container '/^WantedBy=/d'
+add_to_section couchdb.container '[Service]' 'WantedBy=default.target'
+expect_fail "0011 R5(i): WantedBy= outside [Install]" "couchdb.container: missing WantedBy=default.target under [Install]"
+
+fresh; edit couchdb.container 's|^Image=.*|Image=docker.io/library/couchdb|'
+expect_fail "0011 R5(j): untagged image" "couchdb.container: Image=docker.io/library/couchdb has no tag"
+
+fresh; edit couchdb.container 's|^Image=.*|Image=docker.io/library/couchdb@sha256:0000000000000000000000000000000000000000000000000000000000000000|'
+expect_fail "0011 R5(j): digest without a tag" "has no tag (ADR 0003 pins images to a tag"
+
+fresh; edit couchdb.container 's|^Image=.*|Image=docker.io/library/couchdb:latest|'
+expect_fail "0011 R5(j): latest tag" "couchdb.container: Image=docker.io/library/couchdb:latest is tagged latest"
+
+if [ "$failures" -gt 0 ]; then
+  echo "test-check-quadlets: $failures of $n cases failed" >&2
+  exit 1
+fi
+echo "test-check-quadlets: all $n cases passed"

@@ -22,6 +22,7 @@ Rescoped 2026-11-26 after homelab ADR 0005 (accepted 2026-11-26). liquid-sync is
 A Mac signed in as a user can't host a Service, so local development stays on localhost. The end-to-end test runs against the production Pi, the first Service host.
 
 ## Proposed outcome
+- The first real install of 0011's bundle: the host tool, following the contract in ADR 0003, brings CouchDB up rootless on the production Pi (Fedora IoT, arm64, SELinux) with a throwaway vault. 0011 closed on its bundle checks and handed this run over.
 - `https://liquid-sync.<tailnet>.ts.net` serves CouchDB from the production Pi with a valid Tailscale certificate. It is reachable from the owner's devices on 443 only.
 - The first live check of what homelab ADR 0005 provides: the Pi advertises `svc:liquid-sync`, its serve config forwards 443 to `127.0.0.1:5984`, and other ports on the Service are refused (handed over from 0010).
 - The Mac's test vault syncs over that URL instead of localhost.

@@ -2,16 +2,20 @@
 id: 0011
 title: Deploy the stack to a Fedora IoT host
 type: feature
-status: draft
+status: in-review
 risk: low
-tier: 
+tier: standard
 priority: P2
 author: Mike Garabedian
 created: 2026-11-25
-branch: 
-pr: 
+branch: work/0011-deploy-the-stack-to-a-fedora-iot-host
+pr: 10
 source: 0006
 depends: 0016
+spec_hash: requirements=86e94cc14441;acceptance-criteria=fd4f8e406cfd;areas-of-concern=c2d88599546c
+started: 2026-11-27T20:02:25+00:00
+submitted: 2026-11-27T20:16:44+00:00
+submitted_verify: full
 ---
 # Intent: Deploy the stack to a Fedora IoT host
 
@@ -27,13 +31,13 @@ The bundle is close today. `couchdb.container` already publishes only `127.0.0.1
 - `scripts/check-quadlets` (run by `sdlc verify`) checks the contract as well as the podlet diff:
   - Only `.container`, `.volume`, `.network` and `.pod` files, plus the files they mount.
   - Regular files only.
-  - The `*.ini` files in `deploy/quadlets/config/` match their source.
+  - The copies in `deploy/quadlets/` (the `config/*.ini` files and `couchdb.env.example`) match their sources at the repo root.
   - The quadlets keep the port, network, env-file, volume, boot and image-tag promises.
 - A tag of this repo is a bundle the host tool can install.
 - The proof: a host tool following the contract brings CouchDB up rootless on Fedora IoT (arm64, SELinux) with a throwaway vault. That run waits for the host tool, which isn't built yet. The bundle is built and checked now.
 
 ## Affected users and systems
-- `deploy/quadlets/`, which gains `config/`.
+- `deploy/quadlets/`, which gains `config/` and a copy of `couchdb.env.example`.
 - `compose.yaml`, `config/` and `scripts/check-quadlets`.
 - `couchdb.env.example`.
 - ADR 0001, already amended for the contract, and the new ADR 0003.
@@ -55,15 +59,15 @@ The bundle is close today. `couchdb.container` already publishes only `127.0.0.1
 
 ## Out of scope
 - The host tool itself, the service user, lingering, tailscaled and `svc:liquid-sync` publishing. These are all owned by the host side.
-- `deploy/hooks/post-install`, which is 0012's init run as a hook.
+- `deploy/hooks/post-install`, which is 0012's init run as a hook. The bundle ships without it.
 - `deploy/hooks/backup` and `deploy/hooks/restore`, and the host-move drill (Phase 5).
 - HTTPS and the iPhone test (0005).
 
 ## Open questions
-- [ ] How do the `*.ini` files get into `deploy/quadlets/config/`? Options: move `config/` there and point `compose.yaml` at it, or copy them with `check-quadlets --write`. Podlet copies the compose bind-mount path into the quadlet verbatim, so the path has to resolve both from the repo root (compose) and from the installed quadlet directory (quadlet).
-- [ ] Podman 5.0 floor: `check-quadlets` dry-runs with Podman 6.1.3, which won't reject a key newer than 5.0. Should it also dry-run with a 5.0 image, or is checking `Entrypoint=`, `Memory=` and the other keys against the 5.0 docs enough?
-- [ ] Does `couchdb.env.example` need to ship inside `deploy/quadlets/`, or does the host tool read it from the repo root?
-- [ ] Can 0011 ship a bundle with no `post-install` hook (CouchDB up, but single-node setup and the LiveSync config unapplied until 0012), or does the end-to-end proof wait for 0012?
+- [x] How do the `*.ini` files get into `deploy/quadlets/config/`? — They're copied. `config/` at the repo root stays the source of truth and `./config` stays the compose mount. `check-quadlets --write` copies the files into `deploy/quadlets/config/`, and check mode fails on any difference. This keeps the config independent of quadlets: another deployment model would copy from `config/` too.
+- [x] Does `couchdb.env.example` need to ship inside `deploy/quadlets/`? — Yes, as a copy kept in sync by `check-quadlets`, like the `.ini` files. The installed bundle has no repo root.
+- [x] Can 0011 ship a bundle with no `post-install` hook? — Yes. The CouchDB config is all in the `.ini` files, which load when the container starts, and the admin comes from the env file the host writes. So the installed stack is ready for LiveSync without init. 0012 adds the hook later, and 0011 → 0005 doesn't wait on it. Until 0013 exists, the test vault's database is created by hand, as the local runbook does.
+- [ ] Podman 5.0 floor: dry-run the quadlets with `quadlet -dryrun -user` in a Podman 5.0 image, pinned by digest. Should this be a one-time check during the build, or a standing step in `check-quadlets`? A standing step would catch a key newer than 5.0 that arrives with a later `compose.yaml` edit or a podlet bump. It costs one more container run per verify. Settle this in the spec.
 
 ## Tier
 standard — deploy layout and a check script; installing on a host is the host tool's job.

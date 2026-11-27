@@ -10,7 +10,7 @@ author: Mike Garabedian
 created: 2026-11-26
 branch: 
 pr: 
-depends: 0016
+depends: 0011, 0016
 ---
 # Intent: Add liquid-sync init
 
@@ -19,16 +19,19 @@ Phase 2: ./liquid-sync init generates the per-service *.env files from their exa
 
 Rescoped 2026-11-27 for the host bundle contract (`docs/decisions/0003-host-bundle-contract.md`). On a host, the host tool writes `couchdb.env` and starts the units. It then runs `deploy/hooks/post-install` on every apply, as the service user, from the installed quadlet directory. So init has two callers. On a host, init is (or is called by) post-install: it waits for health, then applies the CouchDB config and any migration. Locally, `./liquid-sync init` also generates the env files from their examples and starts the stack.
 
+Refined 2026-11-27 after 0011's spec: on both paths, init has no CouchDB config left to apply. All of it is declared in `config/*.ini`, which the container copies into `local.d/` at start (0003). Single-node setup creates the system databases (`10-single-node.ini`), and the admin comes from `couchdb.env`. 0011 ships copies of those files in the bundle. So on a host, post-install only waits for health, checks the running config for drift against the shipped `.ini` files (as `scripts/check-couchdb-config` does), and provides a place for future migrations. It doesn't write config through the HTTP API, which would put values in `local.d/docker.ini` instead of the repo.
+
 ## Proposed outcome
-- `./liquid-sync init` on the dev Mac generates any missing `*.env` file from its example, starts the stack, waits for CouchDB to be healthy, and applies the CouchDB config through its HTTP API. A second run changes nothing.
-- `deploy/hooks/post-install`, run by the host tool after the units are running, waits for health and applies the same CouchDB config and any migration. It is non-interactive, idempotent, and exits non-zero on failure.
+- `./liquid-sync init` on the dev Mac generates any missing `*.env` file from its example, starts the stack, waits for CouchDB to be healthy, and fails if the running config drifts from `config/*.ini`. A second run changes nothing.
+- `deploy/hooks/post-install`, run by the host tool after the units are running, waits for health, runs the same drift check against the bundle's `config/*.ini`, then runs any migration (none yet). It is non-interactive, idempotent, and exits non-zero on failure.
 - On any host, an existing `couchdb.env` is never created, overwritten or printed. Generating env files from their examples is a local-dev path only.
 - `--help` on every path, and `--dry-run` shows what would change without changing it.
 
 ## Affected users and systems
 - New: the `./liquid-sync` CLI script at the repo root, and `deploy/hooks/post-install`.
 - Helper files the hook needs, in `deploy/quadlets/`, because the hook's working directory is the installed quadlet directory and the repo isn't on the host.
-- `couchdb.env.example`, `config/*.ini` (or their copies under `deploy/quadlets/config/`, per 0011), and `scripts/check-couchdb-config`.
+- `couchdb.env.example`, `config/*.ini` and their bundle copies under `deploy/quadlets/` (0011), and `scripts/check-couchdb-config`, whose drift check the hook needs on a host where the repo isn't present.
+- `scripts/check-quadlets`: 0011's lint and `--write` guard allow only the bundle's current files, so any helper 0012 adds to `deploy/quadlets/` must extend both.
 - CouchDB on the dev Mac and on the production Pi.
 
 ## Constraints
