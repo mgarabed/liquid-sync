@@ -17,7 +17,7 @@ from: spec.md
 - `deploy/quadlets/config/10-single-node.ini`, `deploy/quadlets/config/20-livesync.ini`, `deploy/quadlets/couchdb.env.example` (new) — the copies, written only by `scripts/check-quadlets --write`.
 - `README.md` (edit) — the layout block: `deploy/quadlets/` holds the units plus synced copies of `config/` and the env example.
 - `docs/decisions/0001-container-runtime-and-deployment.md` (edit) — dated amendment (2026-11-27, 0011) to the relative-paths compose rule: the bundle carries copies, and `check-quadlets` keeps them in sync.
-- `docs/decisions/0003-host-bundle-contract.md` (edit) — dated amendment raising the Podman floor from 5.0 to 5.5, with the dry-run evidence.
+- `docs/decisions/0003-host-bundle-contract.md` (edit) — dated amendment raising the Podman floor from 5.0 to 5.5, with the dry-run evidence. Its health-check consequence is amended to point at 0017, which the owner chose over adding it here (2026-11-27).
 - `work/0011-deploy-the-stack-to-a-fedora-iot-host/plan.md` (edit) — tick steps as they land.
 
 ## Order of work
@@ -87,7 +87,7 @@ from: spec.md
 - AC5: the two dry-run outputs from step 4, in the PR.
 - AC6 and AC7: `sdlc verify` ends with `verify: PASS`. `PODMAN=/nonexistent scripts/check-quadlets --skip-if-no-podman` exits 0 with `SKIPPED`. In the AC3 worktree, adding `PodmanArgs=--privileged` to `deploy/quadlets/couchdb.container` and running `scripts/check-quadlets --skip-if-no-podman` with Podman reachable exits 1 and names the lint rule (d) failure, not only the diff.
 - AC8: `git grep -n -f <(grep -oE '=.+' couchdb.env.example | cut -c2-) -- deploy/` matches only `deploy/quadlets/couchdb.env.example`. Also a code read: `check-quadlets` reads only `couchdb.env.example`.
-- AC9: the step 6 transcript in the PR (`_up` returns ok, no MISMATCH, plus `getenforce`, `uname -m`, `podman --version`).
+- AC9: the step 6 transcript in the PR (unauthenticated `_up` returns 401, authenticated `_up` returns ok, no MISMATCH, plus `getenforce`, `uname -m`, `podman --version`).
 - AC10: a code read of the README and the ADR 0001 and ADR 0003 diffs.
 - Finally `sdlc verify`, which must end with `verify: PASS`.
 

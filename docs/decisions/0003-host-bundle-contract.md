@@ -110,7 +110,9 @@ CouchDB admin password, arrives in an env file the host supplies.
   top of its podlet diff and dry-run (0011).
 - `couchdb.container` doesn't yet have a health check or `Notify=healthy`.
   0011 adds them. Compose has no field for `Notify=`, so the podlet diff in
-  `check-quadlets` must allow for it (0011).
+  `check-quadlets` must allow for it (0011). Amended 2026-11-27 (0011):
+  deferred to 0017. The CouchDB image has no curl, and `_up` needs
+  credentials, so the health check needs its own design.
 - `liquid-sync init` splits into two paths (0012):
   - a host path, the `post-install` hook;
   - a local-dev path, which also generates env files and starts the stack.
@@ -122,9 +124,7 @@ CouchDB admin password, arrives in an env file the host supplies.
 
 ## Amendment 2026-11-27 (0011): Podman floor raised from 5.0 to 5.5
 
-Status: pending the host side's agreement. If the host side declines, the
-fallback is to drop `mem_limit:` from `compose.yaml` and reopen ADR 0001's
-memory budget.
+Status: agreed with the host side, 2026-11-27.
 
 `compose.yaml`'s `mem_limit: 512m` becomes `Memory=512mb` in
 `couchdb.container`, and ADR 0001's 1 GB memory budget depends on it. Quadlet
