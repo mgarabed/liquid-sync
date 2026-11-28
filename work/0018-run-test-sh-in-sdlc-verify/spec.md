@@ -7,10 +7,10 @@ from: intent.md
 # Spec: Run test/*.sh in sdlc verify
 
 ## Areas of concern
-- [ ] **A test that hangs stalls verify.** `sdlc verify` waits on each step with no timeout, and macOS has no `timeout` without coreutils (installing it needs the owner's OK, per 0008's Risks). — A hung test blocks every verify until someone presses Ctrl-C. — Accept it: run each test with stdin from `/dev/null`, so a test can't wait on input, and print each test's name before it runs, so the hung one is obvious. No timeout.
-- [ ] **Every verify now runs every test, on the dev Mac.** Today's only test is safe: a stub podman, a closed port, its own temp dir. A later test that touches the real stack, `couchdb.env` or a real vault would run on every verify. — That's a convention, not something the runner can enforce. — Write the rule into CLAUDE.md's Testing section (R6), so each later item's spec and review checks against it.
-- [ ] **Changing `[verify] steps` voids recorded verifies.** `sdlc_core.verify_steps_hash` hashes each step's name, run and fast fields. — Every checkout's last pass goes stale once this merges. That's expected, and the same as 0008. — None needed; the first verify after merge records a new pass.
-- [ ] **No remote CI.** In github review mode, nothing runs verify on the PR. — The tests only guard as well as local verify does. — Out of scope by the intent; a separate item if wanted.
+- [x] **A test that hangs stalls verify.** `sdlc verify` waits on each step with no timeout, and macOS has no `timeout` without coreutils (installing it needs the owner's OK, per 0008's Risks). — A hung test blocks every verify until someone presses Ctrl-C. — Accept it: run each test with stdin from `/dev/null`, so a test can't wait on input, and print each test's name before it runs, so the hung one is obvious. No timeout. — decided: as proposed.
+- [x] **Every verify now runs every test, on the dev Mac.** Today's only test is safe: a stub podman, a closed port, its own temp dir. A later test that touches the real stack, `couchdb.env` or a real vault would run on every verify. — That's a convention, not something the runner can enforce. — Write the rule into CLAUDE.md's Testing section (R6), so each later item's spec and review checks against it. — decided: as proposed.
+- [x] **Changing `[verify] steps` voids recorded verifies.** `sdlc_core.verify_steps_hash` hashes each step's name, run and fast fields. — Every checkout's last pass goes stale once this merges. That's expected, and the same as 0008. — None needed; the first verify after merge records a new pass. — decided: as proposed.
+- [x] **No remote CI.** In github review mode, nothing runs verify on the PR. — The tests only guard as well as local verify does. — Out of scope by the intent; a separate item if wanted. — decided: as proposed.
 
 History: 0008 added the `quadlets` step, the only earlier `config.toml` verify edit. It rejected a `test/` harness then as "a separate decision", and this is that item. 0012 added `test/liquid-sync-init.sh` and ran it by hand.
 
@@ -54,8 +54,8 @@ History: 0008 added the `quadlets` step, the only earlier `config.toml` verify e
 
 ## Open questions
 - [x] Does the step run in `--fast` too? — Yes. verify runs every step under `--fast`, using a step's `fast` command only as a substitute, and the suite takes about 5 s (Design).
-- [ ] Inline the loop in `config.toml`, or a runner script? — Proposed: `scripts/run-tests`. It keeps the control file at one stable line, passes shellcheck, and can be tested itself. An inline loop would need a high-tier item for every change to it.
-- [ ] Stop at the first failure, or run every test and report all failures? — Proposed: run all, then fail. One run shows every broken test, and the suite is small.
+- [x] Inline the loop in `config.toml`, or a runner script? — decided: `scripts/run-tests`. It keeps the control file at one stable line, passes shellcheck, and can be tested itself. An inline loop would need a high-tier item for every change to it.
+- [x] Stop at the first failure, or run every test and report all failures? — decided: run all, then fail. One run shows every broken test, and the suite is small.
 
 ## Standards applied
 - sdlc:security-baseline: fake credentials only in tests and fixtures (rule 1); fail closed, so a non-executable test fails rather than skips (rule 8). No new dependencies (rule 6).
