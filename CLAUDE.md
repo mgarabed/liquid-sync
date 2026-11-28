@@ -49,6 +49,11 @@ ADRs (`NNNN-title.md`).
 - For anything touching migration or the archiver, include a round-trip test:
   vault folder → LiveSync → CouchDB → archiver → files, then diff against the
   original.
+- Script tests are executable `test/<name>.sh` files that exit 0 on pass.
+  `sdlc verify` runs every one through `scripts/run-tests`, so adding a test
+  needs no config edit. A test runs on every verify, so it must be safe at any
+  time: its own temp dir, fake credentials only, never the real env file, a
+  real vault or the running stack.
 
 ## Don't
 
