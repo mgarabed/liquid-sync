@@ -14,7 +14,7 @@ from: spec.md
 - `work/0018-run-test-sh-in-sdlc-verify/plan.md` (edit) — ticks and any departures.
 
 ## Order of work
-- [ ] 1. **Write `test/run-tests.sh` first**, mode 0755, bash with `set -euo pipefail`. Follow `test/liquid-sync-init.sh`'s shape:
+- [x] 1. **Write `test/run-tests.sh` first**, mode 0755, bash with `set -euo pipefail`. Follow `test/liquid-sync-init.sh`'s shape:
   - `here` is the repo root. `tmp="$(mktemp -d /tmp/run-tests-test.XXXXXX)"`, with the same `assert_tmp` case-guard before the `trap ... rm -rf "$tmp"` (only `/tmp/run-tests-test.?*` may be deleted);
   - `ok` and `fail` helpers print `ok <case>` or `FAIL <case>: why`, and the script exits with the failure flag;
   - a `run DIR` helper runs `"$here/scripts/run-tests" DIR`, capturing stdout+stderr into `$tmp/out` and the exit code into `rc`, with `set +e` around it.
@@ -29,7 +29,7 @@ from: spec.md
   - **cwd:** `a.sh` prints `$PWD`. Expect the repo root, resolved with `pwd -P`, even when the runner is started from `$tmp`.
 
   The test fails at this point, since the runner doesn't exist. Don't commit yet; go straight to step 2, so the tree stays green.
-- [ ] 2. **Write `scripts/run-tests`**, mode 0755, bash with `set -euo pipefail`:
+- [x] 2. **Write `scripts/run-tests`**, mode 0755, bash with `set -euo pipefail`:
   - `root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"`. Resolve DIR (default `$root/test`) to an absolute path *before* `cd "$root"`; exit 2 with a message if DIR isn't a directory. `--help` prints one usage line and exits 0.
   - `shopt -s nullglob`, then `for f in "$dir"/*.sh`. No arrays: bash 3.2 (macOS) errors on an empty `"${arr[@]}"` under `set -u`. Count with integers instead.
   - For each file, print it relative to the root when it's under the root. If `[ ! -x "$f" ]`, print `FAIL <f>: not executable` and count a failure. Otherwise print `── <f>`, run `"$f" </dev/null` inside `if`, so `set -e` doesn't stop the loop, and on a non-zero exit print `FAIL <f> (exit N)`.
