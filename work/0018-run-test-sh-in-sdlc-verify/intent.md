@@ -2,17 +2,19 @@
 id: 0018
 title: Run test/*.sh in sdlc verify
 type: chore
-status: building
+status: in-review
 risk: low
 tier: high
 priority: P2
 author: Mike Garabedian
 created: 2026-11-27
 branch: work/0018-run-test-sh-in-sdlc-verify
-pr: 
+pr: 12
 source: 0012
 spec_hash: requirements=2ff8f1f2bc74;acceptance-criteria=17412d533ea1;areas-of-concern=8f962321a56b
 started: 2026-11-28T02:07:16+00:00
+submitted: 2026-11-28T03:21:22+00:00
+submitted_verify: full
 ---
 # Intent: Run test/*.sh in sdlc verify
 
