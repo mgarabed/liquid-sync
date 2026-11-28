@@ -2,7 +2,7 @@
 id: 0018
 title: Run test/*.sh in sdlc verify
 type: chore
-status: specced
+status: planned
 risk: low
 tier: high
 priority: P2
