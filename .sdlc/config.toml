@@ -9,6 +9,7 @@ steps = [
   # { name = "test", run = "make test" },
   { name = "shellcheck", run = "git ls-files -z | xargs -0 grep -lIE '^#!.*\\b(ba)?sh\\b' -- 2>/dev/null | tr '\\n' '\\0' | xargs -0 -r shellcheck -x" },
   { name = "quadlets", run = "PODMAN=\"${PODMAN:-$(command -v podman || echo /opt/podman/bin/podman)}\" scripts/check-quadlets --skip-if-no-podman" },
+  { name = "tests", run = "scripts/run-tests" },
 ]
 
 # targeted: `sdlc verify --targeted` runs this over the test files the branch changed ({files}, each quoted);

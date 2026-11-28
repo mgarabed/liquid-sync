@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Run every top-level DIR/*.sh (default: test/) from the repo root, in name
+# order. Runs them all, names each failure, and exits 1 if any failed.
+# Subdirectories (test/fixtures/ and the like) are never run.
+set -euo pipefail
+
+usage() { echo "usage: scripts/run-tests [DIR]  (default DIR: test/ under the repo root)"; }
+
+case "${1:-}" in
+  -h | --help) usage; exit 0 ;;
+esac
+[ "$#" -le 1 ] || { usage >&2; exit 2; }
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+dir="${1:-$root/test}"
+[ -d "$dir" ] || { echo "run-tests: not a directory: $dir" >&2; exit 2; }
+dir="$(cd "$dir" && pwd)"
+cd "$root"
+
+# Show paths under the repo root relative to it.
+show() {
+  case "$1" in
+    "$root"/*) printf '%s' "${1#"$root"/}" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+# Counters, not arrays: bash 3.2 errors on an empty "${arr[@]}" under set -u.
+passed=0
+failed=0
+shopt -s nullglob
+for f in "$dir"/*.sh; do
+  name="$(show "$f")"
+  # A test that isn't executable fails the run rather than being skipped or run
+  # some other way, so a forgotten chmod can't hide a test (0018 R3).
+  if [ ! -x "$f" ]; then
+    echo "FAIL $name: not executable"
+    failed=$((failed + 1))
+    continue
+  fi
+  echo "── $name"
+  # stdin from /dev/null so a test can't sit waiting on input and stall
+  # verify, which has no timeout (0018 R5).
+  if "$f" </dev/null; then
+    passed=$((passed + 1))
+  else
+    rc=$?
+    echo "FAIL $name (exit $rc)"
+    failed=$((failed + 1))
+  fi
+done
+
+if [ $((passed + failed)) -eq 0 ]; then
+  echo "run-tests: no tests in $(show "$dir")"
+  exit 0
+fi
+echo "run-tests: $passed passed, $failed failed"
+[ "$failed" -eq 0 ]
