@@ -70,7 +70,8 @@ d="$tmp/noexec"
 fake "$d" a.sh 'echo marker-noexec'
 chmod 0644 "$d/a.sh"
 run "$d"
-if [ "$rc" -eq 1 ] && has "FAIL $d/a.sh: not executable" && ! has marker-noexec; then
+if [ "$rc" -eq 1 ] && has "FAIL $d/a.sh: not executable" && ! has marker-noexec \
+  && has "0 passed, 1 failed"; then
   ok "not executable"
 else
   fail "not executable" "rc=$rc"
@@ -106,6 +107,49 @@ if [ "$rc" -eq 0 ] && has "no tests"; then
   ok "empty"
 else
   fail "empty" "rc=$rc"
+fi
+
+# order: tests run in name order, whatever order they were created in.
+d="$tmp/order"
+fake "$d" b.sh 'echo marker-b'
+fake "$d" a.sh 'echo marker-a'
+fake "$d" c.sh 'echo marker-c'
+run "$d"
+la="$(grep -n '^marker-a$' "$tmp/out" | cut -d: -f1)"
+lb="$(grep -n '^marker-b$' "$tmp/out" | cut -d: -f1)"
+lc="$(grep -n '^marker-c$' "$tmp/out" | cut -d: -f1)"
+if [ "$rc" -eq 0 ] && [ -n "$la" ] && [ -n "$lb" ] && [ -n "$lc" ] \
+  && [ "$la" -lt "$lb" ] && [ "$lb" -lt "$lc" ]; then
+  ok "order"
+else
+  fail "order" "lines a=$la b=$lb c=$lc"
+fi
+
+# signal: a test killed by a signal is named with the signal number.
+d="$tmp/signal"
+fake "$d" a.sh 'kill -TERM $$'
+run "$d"
+if [ "$rc" -eq 1 ] && has "FAIL $d/a.sh (exit 143, signal 15)"; then
+  ok "signal"
+else
+  fail "signal" "rc=$rc"
+fi
+
+# empty argument: a usage error, not the default suite. Runs a copy of the
+# runner whose default suite is a fake one, so a regression can't recurse
+# into the real test/ (which holds this file).
+r="$tmp/emptyarg"
+mkdir -p "$r/scripts"
+cp "$here/scripts/run-tests" "$r/scripts/"
+fake "$r" test/a.sh 'echo marker-default'
+set +e
+"$r/scripts/run-tests" "" </dev/null >"$tmp/out" 2>&1
+rc=$?
+set -e
+if [ "$rc" -eq 2 ] && has "not a directory" && ! has marker-default; then
+  ok "empty argument"
+else
+  fail "empty argument" "rc=$rc"
 fi
 
 # cwd: tests run from the repo root, even when the runner starts elsewhere.

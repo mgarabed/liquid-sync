@@ -12,7 +12,8 @@ esac
 [ "$#" -le 1 ] || { usage >&2; exit 2; }
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-dir="${1:-$root/test}"
+# ${1-…}, not ${1:-…}: an empty argument is an error, not the default suite.
+dir="${1-$root/test}"
 [ -d "$dir" ] || { echo "run-tests: not a directory: $dir" >&2; exit 2; }
 dir="$(cd "$dir" && pwd)"
 cd "$root"
@@ -45,7 +46,11 @@ for f in "$dir"/*.sh; do
     passed=$((passed + 1))
   else
     rc=$?
-    echo "FAIL $name (exit $rc)"
+    if [ "$rc" -gt 128 ]; then
+      echo "FAIL $name (exit $rc, signal $((rc - 128)))"
+    else
+      echo "FAIL $name (exit $rc)"
+    fi
     failed=$((failed + 1))
   fi
 done

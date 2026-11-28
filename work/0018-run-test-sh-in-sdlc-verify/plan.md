@@ -44,6 +44,8 @@ from: spec.md
   Run `sdlc verify --fast` and commit.
 - [x] 6. **Close out.** Run a full `sdlc verify` and paste the summary line. Check `git diff main --stat -- .sdlc/config.toml` shows exactly one added line (0018 AC5). Run the verifier agent, then submit. The PR body includes AC3's output and the rollback note from Proof.
 
+**Review round 1 nits applied** (same files, same approach): an empty DIR argument exits 2 instead of running the default suite (`${1-…}`); a signal-killed test is reported as `exit N, signal M`; `test/run-tests.sh` gains order, signal and empty-argument cases, and the not-executable case checks the summary line. The empty-argument case runs a copy of the runner with a fake default suite, so a regression can't recurse into `test/`.
+
 ## Risks
 - **Riskiest step: 3, the config edit.** A TOML or quoting mistake breaks every verify, not just this step. The edit is one plain line with no shell quoting, and `sdlc verify` runs straight after it. As 0008 found, any `[verify] steps` change voids recorded passes: that's expected.
 - **The step can make verify fail on main for an unrelated reason.** If `test/liquid-sync-init.sh` is flaky (its timeout case asserts 3–10 s), verify now fails where it passed before. It has passed every run so far. If it flakes, fix the test in its own item. Don't loosen it here.
