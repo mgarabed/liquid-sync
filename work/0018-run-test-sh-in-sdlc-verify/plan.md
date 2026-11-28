@@ -42,7 +42,7 @@ from: spec.md
   - "Script tests are executable `test/<name>.sh` files that exit 0 on pass. `sdlc verify` runs every one through `scripts/run-tests`, so adding a test needs no config edit. A test runs on every verify, so it must be safe at any time: its own temp dir, fake credentials only, never the real env file, a real vault or the running stack."
 
   Run `sdlc verify --fast` and commit.
-- [ ] 6. **Close out.** Run a full `sdlc verify` and paste the summary line. Check `git diff main --stat -- .sdlc/config.toml` shows exactly one added line (0018 AC5). Run the verifier agent, then submit. The PR body includes AC3's output and the rollback note from Proof.
+- [x] 6. **Close out.** Run a full `sdlc verify` and paste the summary line. Check `git diff main --stat -- .sdlc/config.toml` shows exactly one added line (0018 AC5). Run the verifier agent, then submit. The PR body includes AC3's output and the rollback note from Proof.
 
 ## Risks
 - **Riskiest step: 3, the config edit.** A TOML or quoting mistake breaks every verify, not just this step. The edit is one plain line with no shell quoting, and `sdlc verify` runs straight after it. As 0008 found, any `[verify] steps` change voids recorded passes: that's expected.
